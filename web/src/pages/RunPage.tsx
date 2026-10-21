@@ -19,10 +19,10 @@ import {
   selectAttempt,
   selectConnection,
   selectFailures,
+  selectOverdueHole,
   selectResumeFrom,
   selectRunStatus,
   selectTracks,
-  NOTE_HOLE,
 } from '../lib/runState'
 import type { RunState } from '../lib/runState'
 
@@ -54,15 +54,35 @@ export function RunPage() {
   // its replay buffer, so reconnect: the resume position stops below the hole,
   // and the replay fills it (or the server says it is gone, as a gap). Once per
   // missing seq, so a hole the server cannot fill does not loop.
-  const holeSeq = state.hole?.seq ?? null
-  const holeReported =
-    state.connection.status === 'stale' && state.connection.note === NOTE_HOLE
+  // Checked even after a gap, when the banner is showing the gap instead.
+  const overdue = selectOverdueHole(state)
   useEffect(() => {
-    if (!holeReported || holeSeq === null || refilled.current === holeSeq)
-      return
-    refilled.current = holeSeq
+    if (overdue === null || refilled.current === overdue) return
+    refilled.current = overdue
     socketRef.current?.reconnect()
-  }, [holeReported, holeSeq])
+  }, [overdue])
+
+  // Part of the run could not be replayed. The events are gone, but the
+  // present is not: re-read the snapshot so a failure that happened inside the
+  // gap still gets its card, and bars that finished in it get their end. The
+  // merge only moves forward, so this cannot undo anything newer.
+  const gaps = state.gaps
+  useEffect(() => {
+    if (!runId || gaps === 0) return
+    let alive = true
+    fetchSnapshot(runId)
+      .then((snap) => {
+        if (alive && stateRef.current.runId === runId) {
+          setState((s) => applySnapshot(s, snap))
+        }
+      })
+      .catch(() => {
+        // The gap banner already says the record is incomplete.
+      })
+    return () => {
+      alive = false
+    }
+  }, [runId, gaps])
 
   useEffect(() => {
     if (!runId) return

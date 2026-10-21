@@ -91,6 +91,9 @@ export interface RunState {
   socket: 'connecting' | 'open' | 'closed'
   /** Set by a gap frame, and never cleared: that part of the run is gone. */
   gap: { from: number; earliest: number } | null
+  /** How many gap frames have arrived. The page re-reads the snapshot on each
+   *  one, to recover the present (e.g. a failure) that the gap swallowed. */
+  gaps: number
   /** Retries this screen asked for, keyed by the failed attempt's key. */
   retries: Record<string, RetryRequest>
   /** The lowest missing seq and when a tick first saw it missing. */
@@ -156,6 +159,7 @@ export function createRunState(): RunState {
     floor: 0,
     socket: 'connecting',
     gap: null,
+    gaps: 0,
     retries: {},
     hole: null,
     clock: 0,
@@ -247,6 +251,9 @@ export function applyEvent(state: RunState, e: LabEvent): RunState {
     next.runStatus = laterRunStatus(next.runStatus, 'completed')
   } else if (e.step_id !== undefined && e.attempt !== undefined) {
     next = applyStepEvent(next, e, e.step_id, e.attempt)
+    // A step on an instrument means the run has started, even if the snapshot
+    // was taken a moment before it did. There is no run.started event.
+    next.runStatus = laterRunStatus(next.runStatus, 'running')
   }
   return finish(next)
 }
@@ -300,6 +307,15 @@ export function selectConnection(state: RunState): Connection {
  *  Not the highest seq seen: anything missing below it is asked for again. */
 export function selectResumeFrom(state: RunState): number {
   return state.contiguous
+}
+
+/** The lowest missing seq, once it is overdue; null otherwise. The page
+ *  reconnects once per such seq so the server can replay it. Reported even
+ *  after a gap, when the banner is showing the gap instead. */
+export function selectOverdueHole(state: RunState): number | null {
+  return holeOverdue(state) && state.socket === 'open'
+    ? state.contiguous + 1
+    : null
 }
 
 export interface AttemptDetail {
@@ -415,7 +431,9 @@ export function selectFailures(state: RunState, now: number): FailureView[] {
     const queued = state.refused[attemptKey(a.stepId, a.attempt + 1)] === true
     const inFlight =
       queued || req?.phase === 'requested' || req?.phase === 'accepted'
-    const notLive = state.connection.status !== 'live'
+    // About the socket only: after a gap, or with a hole reported, updates are
+    // still arriving and a dispatch would still be seen.
+    const notLive = state.socket !== 'open'
     const view: FailureView = {
       attempt: a,
       phase: 'idle',
@@ -571,6 +589,7 @@ function applyGap(
   return finish({
     ...state,
     gap: state.gap ?? { from: frame.from, earliest: frame.earliest },
+    gaps: state.gaps + 1,
     contiguous,
     seen,
   })
@@ -610,6 +629,13 @@ function deriveConnection(s: RunState): Connection {
   }
   if (s.gap) return { status: 'gap', lastSeq }
   if (s.socket === 'connecting') return { status: 'connecting', lastSeq }
+  if (holeOverdue(s)) return { status: 'stale', lastSeq, note: NOTE_HOLE }
+  return { status: 'live', lastSeq }
+}
+
+/** A seq has been missing for HOLE_TOLERANCE later events or HOLE_TIMEOUT_MS.
+ *  Independent of the banner, which shows a gap in preference to this. */
+function holeOverdue(s: RunState): boolean {
   // Every key in `seen` is above a missing seq, so its size is how many
   // events have arrived since the hole opened.
   const later = Object.keys(s.seen).length
@@ -617,10 +643,7 @@ function deriveConnection(s: RunState): Connection {
     later > 0 &&
     s.hole?.seq === s.contiguous + 1 &&
     s.clock - s.hole.since >= HOLE_TIMEOUT_MS
-  if (later >= HOLE_TOLERANCE || timedOut) {
-    return { status: 'stale', lastSeq, note: NOTE_HOLE }
-  }
-  return { status: 'live', lastSeq }
+  return later >= HOLE_TOLERANCE || timedOut
 }
 
 function byTimeThenId(a: Attempt, b: Attempt): number {
