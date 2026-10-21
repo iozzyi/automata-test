@@ -3,6 +3,9 @@
 //
 // A bar with no end is still running: it is drawn to the current time and
 // marked, rather than given an end the instrument has not reported.
+//
+// Bars can be clicked (or focused and Enter pressed) to show that attempt's
+// details; the test ids and data-* attributes are unchanged.
 import { ticks, timeScale } from '../lib/scale'
 import type { Track } from '../lib/runState'
 import { DEVICES } from '../lib/types'
@@ -15,10 +18,15 @@ export function Timeline({
   tracks,
   now,
   t0,
+  selected = null,
+  onSelect,
 }: {
   tracks: Track[]
   now: number
   t0: number | null
+  /** `${stepId}#${attempt}` of the bar whose details are shown. */
+  selected?: string | null
+  onSelect?: (stepId: string, attempt: number) => void
 }) {
   const origin = t0 ?? now
   const x = timeScale(origin, now, WIDTH)
@@ -66,9 +74,13 @@ export function Timeline({
                   const end = a.endedAt ?? now
                   const left = x(start)
                   const width = Math.max(Math.min(x(end), WIDTH) - left, 3)
+                  const key = `${a.stepId}#${a.attempt}`
+                  const select = onSelect
+                    ? () => onSelect(a.stepId, a.attempt)
+                    : undefined
                   return (
                     <div
-                      key={`${a.stepId}#${a.attempt}`}
+                      key={key}
                       data-testid="bar"
                       data-step={a.stepId}
                       data-attempt={a.attempt}
@@ -78,7 +90,21 @@ export function Timeline({
                       data-start={String(start)}
                       data-end={a.endedAt === null ? '' : String(a.endedAt)}
                       title={`${a.stepId} (attempt ${a.attempt}) — ${a.status}`}
-                      className={`absolute top-2 h-7 rounded text-[10px] leading-7 px-1 overflow-hidden whitespace-nowrap ${barTone(a.status)}`}
+                      role={select ? 'button' : undefined}
+                      tabIndex={select ? 0 : undefined}
+                      aria-pressed={select ? selected === key : undefined}
+                      onClick={select}
+                      onKeyDown={
+                        select
+                          ? (ev) => {
+                              if (ev.key === 'Enter' || ev.key === ' ') {
+                                ev.preventDefault()
+                                select()
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`absolute top-2 h-7 rounded text-[10px] leading-7 px-1 overflow-hidden whitespace-nowrap ${barTone(a.status)} ${select ? 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900' : ''} ${selected === key ? 'ring-2 ring-slate-900 ring-offset-1' : ''}`}
                       style={{ left, width }}
                     >
                       {a.stepId}

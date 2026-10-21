@@ -245,7 +245,7 @@ stateDiagram-v2
   unconfirmed --> [*]: step.dispatched for n+1
 ```
 
-Precedence when working out the phase: `needs_service` > `queued` (an event is evidence) > `unconfirmed` > the request's own phase > `idle`. `unconfirmed` comes from `now` and `connection`, so it's never stored. RunPage already re-renders every 250 ms with a fresh `now`.
+Precedence when working out the phase: `needs_service` > `unconfirmed` because the connection isn't live (even when queued: the dispatch could not be seen) > `queued` (an event is evidence, so it never times out) > `unconfirmed` because 10 s passed after a 202 > the request's own phase > `idle`. *Refined during build:* the first draft put `queued` above every `unconfirmed`, which contradicted the diagram's `queued → unconfirmed` edge. `unconfirmed` comes from `now` and `connection`, so it's never stored. RunPage already re-renders every 250 ms with a fresh `now`.
 
 The timeline only ever reads `byKey`, which only events change, so a click can never move a bar (R12.7).
 
@@ -269,7 +269,7 @@ The timeline only ever reads `byKey`, which only events change, so a click can n
 3. Code, small and monospace: `SETPOINT_NOT_REACHED`
 4. Action area:
    - retryable: "Check the instrument, then retry. Completed steps are kept." + **[Retry step]** (`retry-button`) + ladder text (`retry-status`)
-   - not retryable: "Retrying won't help: this instrument will fail the same way until it is serviced." · "The run stays blocked; completed steps are kept." · **[Copy report for service]**
+   - not retryable: "Retrying won't help: this instrument will fail the same way until it is serviced." · "The run can't finish until this is fixed. Completed steps are kept." · **[Copy report for service]**
 5. **Instrument details** (open `<details>`), with **[Copy JSON]**
 
 **InstrumentDetails** renders `context` as a two-column list: tidied label (with the raw key in small grey monospace beside it), then the value. Nested values (Q3) go through a recursive `ContextValue`:

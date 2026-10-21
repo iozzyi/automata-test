@@ -85,9 +85,53 @@ export interface RunState {
   socket: 'connecting' | 'open' | 'closed'
   /** Set by a gap frame, and never cleared: that part of the run is gone. */
   gap: { from: number; earliest: number } | null
+  /** Retries this screen asked for, keyed by the failed attempt's key. */
+  retries: Record<string, RetryRequest>
   /** Same as `contiguous`; the name the starter used. */
   lastSeq: number
   connection: Connection
+}
+
+/** A retry this screen asked for, and what the server said. Only events move
+ *  the timeline; this only changes what the failure card claims. */
+export interface RetryRequest {
+  stepId: string
+  attempt: number
+  phase: 'requested' | 'accepted' | 'error'
+  requestedAt: number
+  acceptedAt?: number
+  code?: string
+  message?: string
+  /** The server answered 422: it will not retry this, whatever the event said. */
+  notRetryable?: boolean
+}
+
+/** What came back from the retry endpoint. `RetryResult` in api.ts fits this;
+ *  it is restated here so this file stays free of fetch and the environment. */
+export type RetryOutcome =
+  { ok: true } | { ok: false; status: number; code: string; message: string }
+
+/** No event within this long of a 202, and the card stops claiming progress. */
+export const RETRY_CONFIRM_MS = 10_000
+
+export type FailurePhase =
+  | 'idle'
+  | 'requested'
+  | 'accepted'
+  | 'queued'
+  | 'unconfirmed'
+  | 'error'
+  | 'needs_service'
+
+/** One failure that needs someone to act. */
+export interface FailureView {
+  attempt: Attempt
+  phase: FailurePhase
+  /** Set by someone else's retry: a step.refused for the next attempt with no
+   *  request from this screen. */
+  retriedElsewhere: boolean
+  /** The server's words, for 'error' and for a 422. */
+  message?: string
 }
 
 export function createRunState(): RunState {
@@ -102,6 +146,7 @@ export function createRunState(): RunState {
     floor: 0,
     socket: 'connecting',
     gap: null,
+    retries: {},
     lastSeq: 0,
     connection: { status: 'connecting', lastSeq: 0 },
   }
@@ -260,6 +305,115 @@ export function selectAttempt(
   if (!found) return null
   const next = state.byKey[attemptKey(stepId, attempt + 1)]
   return { attempt: found, supersededBy: next ? next.attempt : null }
+}
+
+/** The Retry button was pressed for this failed attempt. */
+export function applyRetryRequested(
+  state: RunState,
+  stepId: string,
+  attempt: number,
+  now: number,
+): RunState {
+  const key = attemptKey(stepId, attempt)
+  return {
+    ...state,
+    retries: {
+      ...state.retries,
+      [key]: { stepId, attempt, phase: 'requested', requestedAt: now },
+    },
+  }
+}
+
+/** The retry endpoint answered. A 202 (duplicate or not) means accepted; a
+ *  422 means the server will not retry this; anything else is shown as is. */
+export function applyRetryResult(
+  state: RunState,
+  stepId: string,
+  attempt: number,
+  result: RetryOutcome,
+  now: number,
+): RunState {
+  const key = attemptKey(stepId, attempt)
+  const prev = state.retries[key] ?? {
+    stepId,
+    attempt,
+    phase: 'requested' as const,
+    requestedAt: now,
+  }
+  const next: RetryRequest = result.ok
+    ? {
+        stepId,
+        attempt,
+        requestedAt: prev.requestedAt,
+        phase: 'accepted',
+        acceptedAt: now,
+      }
+    : {
+        stepId,
+        attempt,
+        requestedAt: prev.requestedAt,
+        phase: 'error',
+        code: result.code,
+        message: result.message,
+        notRetryable: result.code === 'NOT_RETRYABLE',
+      }
+  return { ...state, retries: { ...state.retries, [key]: next } }
+}
+
+/**
+ * The failures someone has to act on: for each step, its latest attempt, if
+ * that failed and nothing newer has been put on the instrument. A failure that
+ * has been superseded is history: still a red bar, no longer here.
+ *
+ * `now` drives the "not confirmed" rule, so pass the clock the page renders
+ * with. Precedence: needs service > not receiving updates > queued (an event
+ * is evidence) > no confirmation in time > what the request says > idle.
+ */
+export function selectFailures(state: RunState, now: number): FailureView[] {
+  const latest = new Map<string, Attempt>()
+  for (const a of state.attempts) {
+    const cur = latest.get(a.stepId)
+    if (!cur || a.attempt > cur.attempt) latest.set(a.stepId, a)
+  }
+
+  const out: FailureView[] = []
+  for (const a of latest.values()) {
+    if (a.status !== 'failed') continue
+    const key = attemptKey(a.stepId, a.attempt)
+    const req = state.retries[key]
+    const queued = state.refused[attemptKey(a.stepId, a.attempt + 1)] === true
+    const inFlight =
+      queued || req?.phase === 'requested' || req?.phase === 'accepted'
+    const notLive = state.connection.status !== 'live'
+    const view: FailureView = {
+      attempt: a,
+      phase: 'idle',
+      retriedElsewhere: queued && !req,
+    }
+
+    if (a.error?.retryable === false || req?.notRetryable) {
+      view.phase = 'needs_service'
+      if (req?.notRetryable) view.message = req.message
+    } else if (inFlight && notLive) {
+      view.phase = 'unconfirmed'
+    } else if (queued) {
+      view.phase = 'queued'
+    } else if (
+      req?.phase === 'accepted' &&
+      now - (req.acceptedAt ?? now) >= RETRY_CONFIRM_MS
+    ) {
+      view.phase = 'unconfirmed'
+    } else if (req) {
+      view.phase = req.phase
+      if (req.phase === 'error') view.message = req.message
+    }
+    out.push(view)
+  }
+  return out.sort(
+    (x, y) =>
+      (x.attempt.endedAt ?? 0) - (y.attempt.endedAt ?? 0) ||
+      x.attempt.stepId.localeCompare(y.attempt.stepId),
+  )
 }
 
 // ---------------------------------------------------------------------------

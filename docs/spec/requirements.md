@@ -170,7 +170,7 @@ Words used throughout:
 2. IT SHALL explain: "Retrying won't help: this instrument will fail the same way until it is serviced."
 3. IT SHALL show the instrument details (R13), including e.g. `service_ticket`.
 4. IT SHALL offer "Copy report for service" that copies run, step, attempt, instrument, time and the full error as text. `data-testid="copy-service-report"`
-5. IT SHALL state "The run stays blocked; completed steps are kept."
+5. IT SHALL state "The run can't finish until this is fixed. Completed steps are kept." (Changed from "The run stays blocked": a step can fail while other steps are still running, so the run is not always blocked yet when the card appears.)
 6. IT SHALL look visibly different from a retryable card (different colour and icon/label), not just lack a button.
 
 ### R15. The note (required)

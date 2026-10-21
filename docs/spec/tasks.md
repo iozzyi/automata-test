@@ -44,18 +44,23 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 
 ## T4. Problem 2: the failure surface (≈60 min) · R10–R14
 
-- [ ] T4.1 `runState.ts`: `retries`, `applyRetryRequested`, `applyRetryResult`, `selectFailures(state, now)` with phase precedence (§4.2). Unit tests for every ladder transition, incl. the 10 s rule, connection not live, someone else's retry (refused n+1 with no request), 422 → needs service, error → retry again.
-- [ ] T4.2 `contextFormat.ts` + `contextFormat.test.ts`: `tidyLabel`, `formatScalar`, `serviceReport`.
-- [ ] T4.3 `InstrumentDetails` with recursive `ContextValue` (boxes for objects, numbered boxes for lists), raw key beside the label, Copy JSON.
-- [ ] T4.4 `FailureCard` (retryable and needs-service variants), `NeedsAttention` panel; wire into `RunPage` between Banner and Timeline; Retry click → request → result.
-- [ ] T4.5 `Timeline` `onSelect`/`selected` props (keyboard-accessible; test ids and `data-*` unchanged) + `AttemptDetail` below it.
-- [ ] T4.6 Manual check, three runs (record what you saw in WORKLOG, screenshots optional):
+- [x] T4.1 `runState.ts`: `retries`, `applyRetryRequested`, `applyRetryResult`, `selectFailures(state, now)` with phase precedence (§4.2). Unit tests for every ladder transition, incl. the 10 s rule, connection not live, someone else's retry (refused n+1 with no request), 422 → needs service, error → retry again.
+- [x] T4.2 `contextFormat.ts` + `contextFormat.test.ts`: `tidyLabel`, `formatScalar`, `serviceReport`.
+- [x] T4.3 `InstrumentDetails` with recursive `ContextValue` (boxes for objects, numbered boxes for lists), raw key beside the label, Copy JSON.
+- [x] T4.4 `FailureCard` (retryable and needs-service variants), `NeedsAttention` panel; wire into `RunPage` between Banner and Timeline; Retry click → request → result.
+- [x] T4.5 `Timeline` `onSelect`/`selected` props (keyboard-accessible; test ids and `data-*` unchanged) + `AttemptDetail` below it.
+- [x] T4.6 Manual check, three runs (record what you saw in WORKLOG, screenshots optional):
   - `FAIL_STEP=warm_reagent_plate`: card appears on failure; details show all 6 keys with tidied labels; Retry → Requested → Accepted → (Queued) → card leaves; red bar #1 stays; clicking it shows "Superseded by attempt #2"; the run completes.
   - `FAIL_STEP=read_plate`: no Retry button; needs-service styling; `service_ticket` visible; Copy report works; the run stays blocked.
   - `FAIL_STEP=fill_buffer_plate`: liquid handler keys render; retry works on a contended device (Queued state may show).
   - Double-click Retry → only one new attempt.
   - Stop the simulator mid-retry → "Not confirmed yet…".
-- **Done when:** the T4.6 checklist passes, `pnpm test` and `pnpm check` are green, and the acceptance script is still green.
+- **Done when:** the T4.6 checklist passes, `pnpm test` and `pnpm check` are green, and the acceptance script is still green. ✅ 16:42: 94/94 vitest, `pnpm check` + `tsc` clean, acceptance 3/3. T4.6 results:
+  - incubator: card on `step.failed`; 6 keys tidied; recorded ladder requested (58 ms) → accepted (113 ms) → card gone on dispatch (133 ms) → bar #2 appears only at `step.started` (240 ms); red #1 stays; its detail says "Superseded by attempt #2"; run completed.
+  - plate reader: rose card, "Needs service", no Retry button, `service_ticket` SVC-3312 shown; Copy report produces the full text (checked with a stand-in clipboard: the embedded preview browser's real clipboard never answers).
+  - liquid handler: 5 keys incl. "Volume (µL)"; double-click sent exactly one request (button disables), one new attempt, run completed.
+  - simulator stopped: "Not confirmed yet…" then "Couldn't reach the lab server" with Try again.
+  - Not seen live: "Queued, instrument busy" (the workflow never contends on a retried step); covered by unit tests.
 
 ## T5. Rungs 3–4: reconnect and gap (≈30 min) · R2.4, R4.4–R4.8, R8.3
 

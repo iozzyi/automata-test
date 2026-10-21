@@ -1,16 +1,22 @@
 // Provided. Wires the socket and the snapshot into your run state, and renders
 // what the selectors report. It holds no run logic of its own.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AttemptDetail } from '../components/AttemptDetail'
 import { Banner } from '../components/Banner'
+import { NeedsAttention } from '../components/NeedsAttention'
 import { Timeline } from '../pages/Timeline'
-import { createRun, fetchSnapshot, startRun } from '../lib/api'
+import { createRun, fetchSnapshot, retryStep, startRun } from '../lib/api'
 import { connect } from '../lib/socket'
 import {
   applyMessage,
+  applyRetryRequested,
+  applyRetryResult,
   applySnapshot,
   applyTransport,
   createRunState,
+  selectAttempt,
   selectConnection,
+  selectFailures,
   selectResumeFrom,
   selectRunStatus,
   selectTracks,
@@ -21,6 +27,10 @@ export function RunPage() {
   const [state, setState] = useState<RunState>(createRunState)
   const [runId, setRunId] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [selected, setSelected] = useState<{
+    stepId: string
+    attempt: number
+  } | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
 
@@ -64,9 +74,32 @@ export function RunPage() {
 
   const onStart = useCallback(async () => {
     const id = await createRun()
+    setSelected(null)
     setRunId(id)
     await startRun(id)
   }, [])
+
+  // The card says what was asked and what the server answered; the timeline
+  // only moves when the events that follow arrive.
+  const onRetry = useCallback(
+    async (stepId: string, attempt: number) => {
+      if (!runId) return
+      setState((s) => applyRetryRequested(s, stepId, attempt, Date.now()))
+      const result = await retryStep(runId, stepId, attempt)
+      if (stateRef.current.runId !== runId) return // a newer run took over
+      setState((s) => applyRetryResult(s, stepId, attempt, result, Date.now()))
+    },
+    [runId],
+  )
+
+  const onShow = useCallback((stepId: string, attempt: number) => {
+    setSelected({ stepId, attempt })
+  }, [])
+
+  const failures = selectFailures(state, now)
+  const detail = selected
+    ? selectAttempt(state, selected.stepId, selected.attempt)
+    : null
 
   const tracks = selectTracks(state)
   const t0 = tracks
@@ -95,7 +128,28 @@ export function RunPage() {
 
       <Banner connection={selectConnection(state)} />
 
-      <Timeline tracks={tracks} now={now} t0={t0} />
+      <NeedsAttention
+        failures={failures}
+        runId={runId}
+        onRetry={(stepId, attempt) => void onRetry(stepId, attempt)}
+        onShow={onShow}
+      />
+
+      <Timeline
+        tracks={tracks}
+        now={now}
+        t0={t0}
+        selected={selected ? `${selected.stepId}#${selected.attempt}` : null}
+        onSelect={onShow}
+      />
+
+      {detail && (
+        <AttemptDetail
+          detail={detail}
+          runId={runId}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   )
 }
