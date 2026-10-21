@@ -92,6 +92,13 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 - [x] T7.3 Loop 3: QA-16 and QA-18 confirmed closed; no new Critical gaps, so the loop stops (3 of 3 used). New: QA-20 (gap re-read dropped if the run id is still unknown; needs the initial snapshot to fail too) and QA-21 (snapshot time can win over the event's `at` by <1 ms), left for NOTES.
 - [x] T7.4 NOTES.md corrected for what the loops changed (snapshot re-read is now built) and what they found (QA-5/6/7/9/17).
 
+## T8. Changes from Osman's manual testing (17:22–17:31)
+
+- [x] T8.1 R16: the timeline stops at the last report once the run is completed; one outcome line under the header (`selectTimelineEnd`, `selectOutcome`, 9 tests).
+- [x] T8.2 R17: no false "Connecting" banner or ticking axis when no run is open; a run list (`GET /runs`) to reopen or switch runs.
+- [x] T8.3 R18: `PUT /config` (validated, 12 pytest tests) and a scenario picker with 7 named scenarios; the check scripts still warn from `/health`.
+- [x] T8.4 Checks: pytest 63/63, vitest 128/128, tsc and pnpm check clean, acceptance 3/3, check-disconnect 2/2. Browser: picker switched the simulator live; outcome went "Running · 1 step done" → "Blocked: … can be retried" → "Retrying … (attempt 2)" → "Completed in 25.6 s · 7 steps · 1 retry"; axis frozen; refresh → no run → reopened r-1 from the list (attempt 1's red bar absent: snapshot limit). Found and fixed on the way: a bare "Blocked" while the run had resumed, a stale "Applied" message, an empty-list wording.
+
 ## Traceability
 
 | Requirement | Tasks |

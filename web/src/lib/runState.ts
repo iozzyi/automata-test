@@ -340,6 +340,73 @@ export function selectOverdueHole(state: RunState): number | null {
     : null
 }
 
+/**
+ * Where the timeline should end. A completed run stops at the last time an
+ * instrument reported; anything else follows the clock, since time is passing
+ * while it runs or waits for someone.
+ */
+export function selectTimelineEnd(state: RunState, now: number): number {
+  if (state.runStatus !== 'completed') return now
+  const last = lastReported(state.attempts)
+  return last ?? now
+}
+
+/**
+ * One line saying how the run stands, for under the header. Null before
+ * anything has happened. Blocked runs say what they are waiting for.
+ */
+export function selectOutcome(state: RunState, now: number): string | null {
+  const attempts = state.attempts
+  if (attempts.length === 0 && state.runStatus === 'unknown') return null
+  const steps = new Set(attempts.map((a) => a.stepId))
+  const done = new Set(
+    attempts.filter((a) => a.status === 'done').map((a) => a.stepId),
+  )
+  const retries = attempts.filter((a) => a.attempt > 1).length
+  const failures = selectFailures(state, now)
+
+  if (state.runStatus === 'completed') {
+    const starts = attempts
+      .map((a) => a.startedAt)
+      .filter((t): t is number => t !== null)
+    const first = starts.length ? Math.min(...starts) : null
+    const last = lastReported(attempts)
+    const took =
+      first !== null && last !== null
+        ? ` in ${formatDuration(last - first)}`
+        : ''
+    const r = retries === 1 ? '1 retry' : `${retries || 'no'} retries`
+    return `Completed${took} · ${plural(steps.size, 'step')} · ${r}`
+  }
+
+  if (state.runStatus === 'blocked') {
+    const f = failures[0]
+    if (f) {
+      return f.phase === 'needs_service'
+        ? `Blocked: ${f.attempt.stepId} needs service`
+        : `Blocked: ${f.attempt.stepId} failed and can be retried`
+    }
+    // The run stays "blocked" while a retried step runs (there is no event
+    // for it resuming), so say what is actually happening.
+    const retrying = latestPerStep(attempts).find(
+      (a) => a.attempt > 1 && a.status !== 'done' && a.status !== 'failed',
+    )
+    if (retrying) {
+      return `Retrying ${retrying.stepId} (attempt ${retrying.attempt})`
+    }
+    // Nothing failed any more and the retried step is done, so the run has
+    // moved on, though its status still says blocked until it completes.
+    return `Running again after a retry · ${plural(done.size, 'step')} done`
+  }
+
+  const failed = failures.length
+    ? ` · ${plural(failures.length, 'step')} failed`
+    : ''
+  return attempts.length
+    ? `Running · ${plural(done.size, 'step')} done${failed}`
+    : 'Starting'
+}
+
 export interface AttemptDetail {
   attempt: Attempt
   /** The next attempt of the same step, once one exists. */
@@ -666,6 +733,34 @@ function holeOverdue(s: RunState): boolean {
     s.hole?.seq === s.contiguous + 1 &&
     s.clock - s.hole.since >= HOLE_TIMEOUT_MS
   return later >= HOLE_TOLERANCE || timedOut
+}
+
+function lastReported(attempts: Attempt[]): number | null {
+  let last: number | null = null
+  for (const a of attempts) {
+    const t = a.endedAt ?? a.startedAt
+    if (t !== null && (last === null || t > last)) last = t
+  }
+  return last
+}
+
+function latestPerStep(attempts: Attempt[]): Attempt[] {
+  const latest = new Map<string, Attempt>()
+  for (const a of attempts) {
+    const cur = latest.get(a.stepId)
+    if (!cur || a.attempt > cur.attempt) latest.set(a.stepId, a)
+  }
+  return [...latest.values()]
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`
+}
+
+function formatDuration(ms: number): string {
+  const s = ms / 1000
+  if (s < 60) return `${s.toFixed(1)} s`
+  return `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`
 }
 
 function byTimeThenId(a: Attempt, b: Attempt): number {

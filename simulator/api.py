@@ -1,11 +1,13 @@
-"""HTTP and WebSocket. Provided, except the TASK block in ``serve_ws``."""
+"""HTTP and WebSocket. Provided, except the TASK block in ``serve_ws`` and the
+simulator-only ``PUT /config`` (scenario switching for testing)."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import random
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
@@ -81,20 +83,32 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
-        c = server.cfg
-        return {
-            "status": "ok",
-            # What the knobs are set to. The scripts read this so they can warn
-            # you when a check is about to fail for a reason you switched on.
-            "config": {
-                "fail_step": c.fail_step,
-                "reorder_pct": c.reorder_pct,
-                "duplicate_pct": c.duplicate_pct,
-                "socket_kill_ms": c.socket_kill_ms,
-                "socket_reject_ms": c.socket_reject_ms,
-                "replay_buffer_size": c.replay_buffer_size,
-            },
-        }
+        # What the knobs are set to. The scripts read this so they can warn
+        # you when a check is about to fail for a reason you switched on.
+        return {"status": "ok", "config": asdict(server.cfg)}
+
+    @app.put("/config")
+    async def set_config(request: Request) -> Response:
+        """Change the knobs at runtime, so a tester can switch scenarios from
+        the page instead of restarting the container. Simulator only: it
+        stands in for the lab, and a real fleet would have no such endpoint.
+
+        Partial updates; wire chaos applies at once, fail_step and
+        replay_buffer_size to runs created afterwards. Clears the reorder
+        knob's held events and any reconnect lock-out, so a new scenario
+        starts clean.
+        """
+        try:
+            body = json.loads(await request.body() or b"{}")
+        except ValueError:
+            return _config_error("The body is not valid JSON.")
+        problem = _check_config(body)
+        if problem:
+            return _config_error(problem)
+        server.cfg = replace(server.cfg, **body)
+        server._held = []
+        server._open_from = 0.0
+        return JSONResponse({"status": "ok", "config": asdict(server.cfg)})
 
     @app.get("/workflows")
     async def workflows() -> dict[str, Any]:
@@ -164,6 +178,39 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         await _serve_ws(server, ws)
 
     return app
+
+
+_STEP_IDS = frozenset(d.id for d in DEFAULT_WORKFLOW)
+_INT_RANGES: dict[str, tuple[int, int | None]] = {
+    "reorder_pct": (0, 100),
+    "duplicate_pct": (0, 100),
+    "socket_kill_ms": (0, None),
+    "socket_reject_ms": (0, None),
+    "replay_buffer_size": (1, None),
+}
+
+
+def _check_config(body: Any) -> str | None:
+    """What is wrong with a PUT /config body, or None."""
+    if not isinstance(body, dict):
+        return "The body must be a JSON object of knob names to values."
+    unknown = sorted(set(body) - {"fail_step", *_INT_RANGES})
+    if unknown:
+        return f"Unknown knob(s): {', '.join(unknown)}."
+    if "fail_step" in body and body["fail_step"] not in ("", *_STEP_IDS):
+        return f"fail_step must be empty or one of: {', '.join(sorted(_STEP_IDS))}."
+    for key, (low, high) in _INT_RANGES.items():
+        if key not in body:
+            continue
+        v = body[key]
+        if isinstance(v, bool) or not isinstance(v, int) or v < low or (high and v > high):
+            limit = f"{low}-{high}" if high else f"{low} or more"
+            return f"{key} must be a whole number, {limit}."
+    return None
+
+
+def _config_error(message: str) -> Response:
+    return JSONResponse({"code": "INVALID_CONFIG", "message": message}, status_code=400)
 
 
 async def _serve_ws(server: Server, ws: WebSocket) -> None:

@@ -467,3 +467,73 @@ def test_a_servable_resume_gets_no_gap_frame() -> None:
             assert [first["seq"]] + [ws.receive_json()["seq"] for _ in range(2)] == [8, 9, 10]
     finally:
         client.__exit__(None, None, None)
+
+
+# ---------------------------------------------------------------------------
+# R18: switching scenarios at runtime (PUT /config)
+# ---------------------------------------------------------------------------
+
+
+async def test_config_can_be_changed_and_is_reported_by_health() -> None:
+    app = create_app(Config())
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://sim") as client:
+        res = await client.put("/config", json={"fail_step": "read_plate", "reorder_pct": 30})
+        assert res.status_code == 200
+        assert res.json()["config"]["fail_step"] == "read_plate"
+        health = (await client.get("/health")).json()["config"]
+        assert health == {
+            "fail_step": "read_plate",
+            "reorder_pct": 30,
+            "duplicate_pct": 0,
+            "socket_kill_ms": 0,
+            "socket_reject_ms": 0,
+            "replay_buffer_size": 64,
+        }
+
+
+async def test_new_runs_pick_up_the_changed_config() -> None:
+    app = create_app(Config())
+    server = app.state.server
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://sim") as client:
+        await client.put("/config", json={"fail_step": "read_plate", "replay_buffer_size": 3})
+        run_id = (await client.post("/runs")).json()["id"]
+        assert server.runs[run_id]._fail_at == "read_plate"
+        assert server.streams[run_id]._buf_size == 3
+
+
+async def test_changing_config_clears_held_events_and_lockout() -> None:
+    app = create_app(Config(reorder_pct=100))
+    server = app.state.server
+    server._held = [Event(run_id="r-1", type=STEP_STARTED, at="x")]
+    server._open_from = 10**9
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://sim") as client:
+        await client.put("/config", json={"reorder_pct": 0})
+    assert server._held == []
+    assert server._open_from == 0.0
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"nope",
+        b"[1]",
+        b'{"colour": "red"}',
+        b'{"fail_step": "teleport"}',
+        b'{"reorder_pct": 101}',
+        b'{"duplicate_pct": -1}',
+        b'{"socket_kill_ms": "4000"}',
+        b'{"replay_buffer_size": 0}',
+        b'{"replay_buffer_size": true}',
+    ],
+)
+async def test_bad_config_is_rejected_and_changes_nothing(body: bytes) -> None:
+    app = create_app(Config())
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://sim") as client:
+        res = await client.put("/config", content=body)
+        assert res.status_code == 400
+        assert res.json()["code"] == "INVALID_CONFIG"
+    assert app.state.server.cfg == Config()

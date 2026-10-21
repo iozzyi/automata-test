@@ -176,6 +176,37 @@ Words used throughout:
 5. IT SHALL state "The run can't finish until this is fixed. Completed steps are kept." (Changed from "The run stays blocked": a step can fail while other steps are still running, so the run is not always blocked yet when the card appears.)
 6. IT SHALL look visibly different from a retryable card (different colour and icon/label), not just lack a button.
 
+### R16. The run's outcome (added after manual testing)
+
+*As a scientist, I want to see at a glance how the run ended, and not watch an empty timeline grow after it has.*
+
+1. WHEN the run is `completed`, THE timeline SHALL stop at the last time an instrument reported, instead of following the clock. (Running, blocked and unknown runs still follow the clock: time is passing while they wait.) **[new test]**
+2. THE page SHALL show one outcome line under the header (`data-testid="run-outcome"`, announced politely to screen readers):
+   - running: "Running · N steps done"
+   - blocked with a failure to act on: "Blocked: <step> failed and can be retried" or "Blocked: <step> needs service"
+   - blocked while a retry is under way: "Retrying <step> (attempt n)"
+   - blocked, but nothing failed any more (the retried step finished; the simulator keeps saying "blocked" until the end): "Running again after a retry · N steps done"
+   - completed: "Completed in <duration> · N steps · R retries"
+   **[new test]**
+3. The header's existing `run-status` text SHALL stay as it is (the e2e checks read it).
+
+### R17. Reopening a run (added after manual testing)
+
+*As a scientist who refreshed the page, I want to get back to my run.*
+
+1. WHEN no run is open, THE page SHALL NOT show a connection banner or an empty timeline; it SHALL say "No run open" and offer **Start a run** and a list of recent runs from `GET /runs` (newest first, with status). `data-testid="recent-runs"`
+2. WHEN a recent run is chosen, THE page SHALL open it exactly as a new run is opened: snapshot first, then the stream from the snapshot's position. (A run reopened after a retry shows only the latest attempt: the snapshot's known limit.)
+3. The list SHALL also be reachable while a run is open, to switch runs.
+
+### R18. Choosing a test scenario from the page (added after manual testing)
+
+*As the person testing this, I want to switch failure and network scenarios without restarting Docker.*
+
+1. THE simulator SHALL accept `PUT /config` with any of its knobs (`fail_step`, `reorder_pct`, `duplicate_pct`, `socket_kill_ms`, `socket_reject_ms`, `replay_buffer_size`), validate them (percentages 0–100, times ≥ 0, buffer ≥ 1, `fail_step` empty or a workflow step), and answer with the full config as `GET /health` reports it. Unknown keys or bad values → 400 `INVALID_CONFIG`. **[new test]**
+2. Wire chaos SHALL apply at once; `fail_step` and `replay_buffer_size` SHALL apply to runs started afterwards. Changing the config SHALL also clear the reorder knob's held events and any reconnect lock-out.
+3. THE page SHALL offer named scenarios (clean; incubator fault; plate reader needs service; liquid handler fault; reorder and duplicate; dropped connection; unrecoverable gap), show which one is active, and say when it takes effect. It SHALL be labelled as a simulator testing control. `data-testid="scenario-picker"`
+4. This endpoint exists only because the simulator stands in for the lab; a real instrument fleet would not have it. The check scripts' "knob left on" warnings read `/health`, so they still warn.
+
 ### R15. The note (required)
 
 1. `NOTES.md` SHALL start with time spent, then about 400 words on: what we deliberately didn't build; where the state layer is most likely to break; what happens with an event for a never-seen step; what to change or keep in the event contract and endpoint. It SHALL end with blunt feedback on the exercise.

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AttemptDetail } from '../components/AttemptDetail'
 import { Banner } from '../components/Banner'
 import { NeedsAttention } from '../components/NeedsAttention'
+import { RunPicker } from '../components/RunPicker'
+import { ScenarioPicker } from '../components/ScenarioPicker'
 import { Timeline } from '../pages/Timeline'
 import { createRun, fetchSnapshot, retryStep, startRun } from '../lib/api'
 import { connect } from '../lib/socket'
@@ -20,9 +22,11 @@ import {
   selectAttempt,
   selectConnection,
   selectFailures,
+  selectOutcome,
   selectOverdueHole,
   selectResumeFrom,
   selectRunStatus,
+  selectTimelineEnd,
   selectTracks,
 } from '../lib/runState'
 import type { RunState } from '../lib/runState'
@@ -119,12 +123,18 @@ export function RunPage() {
     }
   }, [runId])
 
-  const onStart = useCallback(async () => {
-    const id = await createRun()
+  // Opening a run, new or earlier, goes the same way: the runId effect above
+  // loads its snapshot and then subscribes from there.
+  const openRun = useCallback((id: string) => {
     setSelected(null)
     setRunId(id)
-    await startRun(id)
   }, [])
+
+  const onStart = useCallback(async () => {
+    const id = await createRun()
+    openRun(id)
+    await startRun(id)
+  }, [openRun])
 
   // The card says what was asked and what the server answered; the timeline
   // only moves when the events that follow arrive.
@@ -157,38 +167,70 @@ export function RunPage() {
       null,
     )
 
+  const outcome = runId ? selectOutcome(state, now) : null
+  const runStatus = selectRunStatus(state)
+
   return (
     <div className="mx-auto max-w-6xl p-6 space-y-4 font-sans">
-      <header className="flex items-center gap-3">
+      <ScenarioPicker />
+
+      <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-semibold">Lab run monitor</h1>
         <span data-testid="run-status" className="text-sm text-slate-600">
-          {runId ? `${runId} — ${selectRunStatus(state)}` : 'no run'}
+          {runId ? `${runId} — ${runStatus}` : 'no run'}
         </span>
-        <button
-          data-testid="start-run"
-          onClick={onStart}
-          className="ml-auto rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
-        >
-          Start a run
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <RunPicker
+            currentRunId={runId}
+            refreshKey={`${runId}:${runStatus}`}
+            onOpen={openRun}
+          />
+          <button
+            data-testid="start-run"
+            onClick={onStart}
+            className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
+          >
+            Start a run
+          </button>
+        </div>
       </header>
 
-      <Banner connection={selectConnection(state)} />
+      {outcome && (
+        <p
+          data-testid="run-outcome"
+          aria-live="polite"
+          className="-mt-2 text-sm font-medium text-slate-800"
+        >
+          {outcome}
+        </p>
+      )}
 
-      <NeedsAttention
-        failures={failures}
-        runId={runId}
-        onRetry={(stepId, attempt) => void onRetry(stepId, attempt)}
-        onShow={onShow}
-      />
+      {runId === null ? (
+        <p className="rounded border border-slate-200 px-3 py-6 text-center text-sm text-slate-600">
+          No run open. Start a run, or reopen an earlier one from the run list.
+        </p>
+      ) : (
+        <>
+          <Banner connection={selectConnection(state)} />
 
-      <Timeline
-        tracks={tracks}
-        now={now}
-        t0={t0}
-        selected={selected ? `${selected.stepId}#${selected.attempt}` : null}
-        onSelect={onShow}
-      />
+          <NeedsAttention
+            failures={failures}
+            runId={runId}
+            onRetry={(stepId, attempt) => void onRetry(stepId, attempt)}
+            onShow={onShow}
+          />
+
+          <Timeline
+            tracks={tracks}
+            now={selectTimelineEnd(state, now)}
+            t0={t0}
+            selected={
+              selected ? `${selected.stepId}#${selected.attempt}` : null
+            }
+            onSelect={onShow}
+          />
+        </>
+      )}
 
       {detail && (
         <AttemptDetail

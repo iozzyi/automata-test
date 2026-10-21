@@ -60,6 +60,39 @@ export type RetryResult =
 
 /** Retry a failed attempt. Always pins the attempt, so a repeat (a double
  *  click, a retried request) is reported as a duplicate, not a second retry. */
+/** The simulator's knobs, as GET /health and PUT /config report them. */
+export interface SimConfig {
+  fail_step: string
+  reorder_pct: number
+  duplicate_pct: number
+  socket_kill_ms: number
+  socket_reject_ms: number
+  replay_buffer_size: number
+}
+
+export async function getConfig(): Promise<SimConfig> {
+  const r = await fetch(`${BASE}/health`)
+  if (!r.ok) throw new Error(`The simulator answered ${r.status}.`)
+  return ((await r.json()) as { config: SimConfig }).config
+}
+
+/** Change the simulator's knobs. Testing only: see PUT /config. */
+export async function setConfig(cfg: Partial<SimConfig>): Promise<SimConfig> {
+  const r = await fetch(`${BASE}/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg),
+  })
+  const body = (await r.json().catch(() => ({}))) as {
+    config?: SimConfig
+    message?: string
+  }
+  if (!r.ok || !body.config) {
+    throw new Error(body.message ?? `The simulator answered ${r.status}.`)
+  }
+  return body.config
+}
+
 export async function retryStep(
   runId: string,
   stepId: string,
