@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 import fixture from './fixtures/run-with-retry.json'
 import {
   applyMessage,
+  applySnapshot,
   applyRetryRequested,
   applyRetryResult,
   applyTransport,
@@ -85,7 +86,7 @@ describe('selectOutcome', () => {
     let s = applyRetryRequested(upTo(18), 'warm_reagent_plate', 1, T)
     s = applyRetryResult(s, 'warm_reagent_plate', 1, { ok: true }, T)
     expect(selectOutcome(s, T)).toBe(
-      'Blocked: warm_reagent_plate failed and can be retried',
+      'Blocked: retry of warm_reagent_plate requested, waiting for the instrument',
     )
   })
 
@@ -94,5 +95,49 @@ describe('selectOutcome', () => {
     expect(selectOutcome(upTo(28), T)).toBe(
       `Completed in ${took} s · 7 steps · 1 retry`,
     )
+  })
+})
+
+describe('QA review of R16 (QA-22 to QA-24, QA-27)', () => {
+  const gap = (from: number, earliest: number) => ({
+    type: 'gap',
+    from,
+    earliest,
+  })
+  const blocked: LabEvent = { ...CLEAN.find((e) => e.seq === 18)! }
+
+  test('QA-22: blocked by a failure that never arrived does not claim a retry', () => {
+    // Seqs 11-17 (incl. the failure) lost; run.blocked arrives.
+    let s = applyMessage(upTo(10), gap(10, 18))
+    s = applyMessage(s, blocked)
+    expect(selectOutcome(s, T)).toBe(
+      'Blocked (details not received) (record incomplete)',
+    )
+  })
+
+  test('QA-23: while a retry is in flight the line agrees with the card', () => {
+    let s = applyRetryRequested(upTo(18), 'warm_reagent_plate', 1, T)
+    s = applyRetryResult(s, 'warm_reagent_plate', 1, { ok: true }, T)
+    expect(selectOutcome(s, T)).toBe(
+      'Blocked: retry of warm_reagent_plate requested, waiting for the instrument',
+    )
+  })
+
+  test('QA-24: totals after a gap say the record is incomplete', () => {
+    const s = CLEAN.filter((e) => e.seq >= 27).reduce<RunState>(
+      (st, e) => applyMessage(st, e),
+      applyMessage(upTo(3), gap(3, 27)),
+    )
+    expect(selectOutcome(s, T)).toMatch(
+      /^Completed in .* \(record incomplete\)$/,
+    )
+  })
+
+  test('QA-27: a run that was created but never started says so', () => {
+    const s = applySnapshot(createRunState(), {
+      seq: 0,
+      run: { id: 'r-1', status: 'created', steps: [] },
+    })
+    expect(selectOutcome(s, T)).toBe('Not started yet')
   })
 })

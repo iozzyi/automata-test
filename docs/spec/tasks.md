@@ -99,6 +99,8 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 - [x] T8.3 R18: `PUT /config` (validated, 12 pytest tests) and a scenario picker with 7 named scenarios; the check scripts still warn from `/health`.
 - [x] T8.4 Checks: pytest 63/63, vitest 128/128, tsc and pnpm check clean, acceptance 3/3, check-disconnect 2/2. Browser: picker switched the simulator live; outcome went "Running · 1 step done" → "Blocked: … can be retried" → "Retrying … (attempt 2)" → "Completed in 25.6 s · 7 steps · 1 retry"; axis frozen; refresh → no run → reopened r-1 from the list (attempt 1's red bar absent: snapshot limit). Found and fixed on the way: a bare "Blocked" while the run had resumed, a stale "Applied" message, an empty-list wording.
 
+- [x] T8.5 QA review of R16–R18: no gaps labelled Critical; by our definition (false claims) QA-22, QA-24 and QA-25 are Critical and were fixed with QA-23, QA-27, QA-28 (wording) and QA-26 (reset hint). 4 new tests (132/132); browser: switching runs starts from an empty state (old bars never shown under the new id). QA-29 (no cap on replay_buffer_size) left as a nit. acceptance 3/3, check-disconnect 2/2.
+
 ## Traceability
 
 | Requirement | Tasks |

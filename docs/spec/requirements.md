@@ -184,9 +184,13 @@ Words used throughout:
 2. THE page SHALL show one outcome line under the header (`data-testid="run-outcome"`, announced politely to screen readers):
    - running: "Running · N steps done"
    - blocked with a failure to act on: "Blocked: <step> failed and can be retried" or "Blocked: <step> needs service"
+   - blocked while a retry has been asked for but is not on the instrument yet: "Blocked: retry of <step> requested, waiting for the instrument" (agrees with the card)
    - blocked while a retry is under way: "Retrying <step> (attempt n)"
    - blocked, but nothing failed any more (the retried step finished; the simulator keeps saying "blocked" until the end): "Running again after a retry · N steps done"
+   - blocked with no failure on screen and no retry (the failure fell in a gap): "Blocked (details not received)"
+   - a run created but not started: "Not started yet"
    - completed: "Completed in <duration> · N steps · R retries"
+   - after a gap, every line ends "(record incomplete)", since its counts come from an incomplete record
    **[new test]**
 3. The header's existing `run-status` text SHALL stay as it is (the e2e checks read it).
 
@@ -194,6 +198,7 @@ Words used throughout:
 
 *As a scientist who refreshed the page, I want to get back to my run.*
 
+0. Opening a run (new or earlier) SHALL clear the previous run's state at once, so its bars and Retry buttons never show under the new id. (QA-25)
 1. WHEN no run is open, THE page SHALL NOT show a connection banner or an empty timeline; it SHALL say "No run open" and offer **Start a run** and a list of recent runs from `GET /runs` (newest first, with status). `data-testid="recent-runs"`
 2. WHEN a recent run is chosen, THE page SHALL open it exactly as a new run is opened: snapshot first, then the stream from the snapshot's position. (A run reopened after a retry shows only the latest attempt: the snapshot's known limit.)
 3. The list SHALL also be reachable while a run is open, to switch runs.

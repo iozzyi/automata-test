@@ -356,6 +356,13 @@ export function selectTimelineEnd(state: RunState, now: number): number {
  * anything has happened. Blocked runs say what they are waiting for.
  */
 export function selectOutcome(state: RunState, now: number): string | null {
+  const line = outcomeLine(state, now)
+  // After a gap the counts and times come from an incomplete record (and,
+  // until the snapshot re-read lands, from a partial present). Say so.
+  return line && state.gap ? `${line} (record incomplete)` : line
+}
+
+function outcomeLine(state: RunState, now: number): string | null {
   const attempts = state.attempts
   if (attempts.length === 0 && state.runStatus === 'unknown') return null
   const steps = new Set(attempts.map((a) => a.stepId))
@@ -382,9 +389,13 @@ export function selectOutcome(state: RunState, now: number): string | null {
   if (state.runStatus === 'blocked') {
     const f = failures[0]
     if (f) {
-      return f.phase === 'needs_service'
-        ? `Blocked: ${f.attempt.stepId} needs service`
-        : `Blocked: ${f.attempt.stepId} failed and can be retried`
+      const step = f.attempt.stepId
+      if (f.phase === 'needs_service') return `Blocked: ${step} needs service`
+      if (f.phase === 'idle' || f.phase === 'error') {
+        return `Blocked: ${step} failed and can be retried`
+      }
+      // Agrees with the card: asked for, not yet on the instrument.
+      return `Blocked: retry of ${step} requested, waiting for the instrument`
     }
     // The run stays "blocked" while a retried step runs (there is no event
     // for it resuming), so say what is actually happening.
@@ -394,17 +405,22 @@ export function selectOutcome(state: RunState, now: number): string | null {
     if (retrying) {
       return `Retrying ${retrying.stepId} (attempt ${retrying.attempt})`
     }
-    // Nothing failed any more and the retried step is done, so the run has
+    // Nothing failed any more and a retried step is done, so the run has
     // moved on, though its status still says blocked until it completes.
-    return `Running again after a retry · ${plural(done.size, 'step')} done`
+    if (retries > 0) {
+      return `Running again after a retry · ${plural(done.size, 'step')} done`
+    }
+    // Blocked, but the failure behind it never reached this screen.
+    return 'Blocked (details not received)'
   }
 
+  if (attempts.length === 0) {
+    return state.runStatus === 'created' ? 'Not started yet' : 'Starting'
+  }
   const failed = failures.length
     ? ` · ${plural(failures.length, 'step')} failed`
     : ''
-  return attempts.length
-    ? `Running · ${plural(done.size, 'step')} done${failed}`
-    : 'Starting'
+  return `Running · ${plural(done.size, 'step')} done${failed}`
 }
 
 export interface AttemptDetail {

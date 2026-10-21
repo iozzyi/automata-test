@@ -125,7 +125,13 @@ export function RunPage() {
 
   // Opening a run, new or earlier, goes the same way: the runId effect above
   // loads its snapshot and then subscribes from there.
+  // The old run's state is cleared at once, not when the new snapshot lands:
+  // otherwise its bars and Retry buttons would show under the new id, and a
+  // Retry clicked then would go to the wrong run (QA-25).
   const openRun = useCallback((id: string) => {
+    const empty = createRunState()
+    stateRef.current = empty
+    setState(empty)
     setSelected(null)
     setRunId(id)
   }, [])

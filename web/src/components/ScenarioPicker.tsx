@@ -26,7 +26,7 @@ export const SCENARIOS: Scenario[] = [
   {
     id: 'clean',
     label: 'Clean run',
-    hint: 'Everything works: seven green bars in about 14 s.',
+    hint: 'Everything works: seven green bars in about 14 s. Pick this to reset the simulator (settings made here survive `docker compose up -d`).',
     config: OFF,
   },
   {
@@ -103,7 +103,9 @@ export function ScenarioPicker() {
     setBusy(true)
     try {
       setCurrent(await setConfig(scenario.config))
-      setMessage('Applied. Start a new run to see it.')
+      setMessage(
+        'Applied. Network settings act now; failures and the buffer size apply to the next run.',
+      )
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'The change was not applied.')
     } finally {
