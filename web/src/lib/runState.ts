@@ -15,8 +15,10 @@
 //
 // Missing sequence numbers are tracked rather than waited for. The resume
 // position is the highest seq with nothing missing before it, so a reconnect
-// asks for the holes again; a hole that stays open while HOLE_TOLERANCE later
-// events arrive makes the screen stop claiming to be live.
+// asks for the holes again. A hole that stays open while HOLE_TOLERANCE later
+// events arrive, or for HOLE_TIMEOUT_MS of wall-clock time (fed in by
+// applyTick, so this file never reads a clock), makes the screen stop claiming
+// to be live. The page then reconnects to have the server replay it.
 //
 // Plain TypeScript on purpose: no React in this file, so the tests call
 // straight into it. Keep the exported signatures -- they do.
@@ -60,6 +62,10 @@ export interface Connection {
  *  not raise false alarms. See docs/spec/design.md, O1. */
 export const HOLE_TOLERANCE = 10
 
+/** A hole open this long is reported even if no later events arrive: at the
+ *  end of a run there may be none to count. See docs/spec/design.md, O5. */
+export const HOLE_TIMEOUT_MS = 2000
+
 export const NOTE_HOLE =
   'An update was lost in transit; this view may be incomplete.'
 export const NOTE_CLOSED_AFTER_GAP =
@@ -87,6 +93,10 @@ export interface RunState {
   gap: { from: number; earliest: number } | null
   /** Retries this screen asked for, keyed by the failed attempt's key. */
   retries: Record<string, RetryRequest>
+  /** The lowest missing seq and when a tick first saw it missing. */
+  hole: { seq: number; since: number } | null
+  /** The time of the last applyTick, for the hole timeout. */
+  clock: number
   /** Same as `contiguous`; the name the starter used. */
   lastSeq: number
   connection: Connection
@@ -147,6 +157,8 @@ export function createRunState(): RunState {
     socket: 'connecting',
     gap: null,
     retries: {},
+    hole: null,
+    clock: 0,
     lastSeq: 0,
     connection: { status: 'connecting', lastSeq: 0 },
   }
@@ -305,6 +317,25 @@ export function selectAttempt(
   if (!found) return null
   const next = state.byKey[attemptKey(stepId, attempt + 1)]
   return { attempt: found, supersededBy: next ? next.attempt : null }
+}
+
+/**
+ * The page's clock. Starts or restarts the hole timer when the lowest missing
+ * seq changes, clears it when nothing is missing, and lets the timeout rule in
+ * the connection status see the time. Returns the same state when there is no
+ * hole, so an idle tick costs nothing.
+ */
+export function applyTick(state: RunState, now: number): RunState {
+  const missing =
+    Object.keys(state.seen).length > 0 ? state.contiguous + 1 : null
+  if (missing === null) {
+    return state.hole === null
+      ? state
+      : finish({ ...state, hole: null, clock: now })
+  }
+  const hole =
+    state.hole?.seq === missing ? state.hole : { seq: missing, since: now }
+  return finish({ ...state, hole, clock: now })
 }
 
 /** The Retry button was pressed for this failed attempt. */
@@ -581,7 +612,12 @@ function deriveConnection(s: RunState): Connection {
   if (s.socket === 'connecting') return { status: 'connecting', lastSeq }
   // Every key in `seen` is above a missing seq, so its size is how many
   // events have arrived since the hole opened.
-  if (Object.keys(s.seen).length >= HOLE_TOLERANCE) {
+  const later = Object.keys(s.seen).length
+  const timedOut =
+    later > 0 &&
+    s.hole?.seq === s.contiguous + 1 &&
+    s.clock - s.hole.since >= HOLE_TIMEOUT_MS
+  if (later >= HOLE_TOLERANCE || timedOut) {
     return { status: 'stale', lastSeq, note: NOTE_HOLE }
   }
   return { status: 'live', lastSeq }

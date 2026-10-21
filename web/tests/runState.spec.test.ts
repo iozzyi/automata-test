@@ -3,12 +3,14 @@
 import { describe, expect, test } from 'vitest'
 import fixture from './fixtures/run-with-retry.json'
 import {
+  HOLE_TIMEOUT_MS,
   HOLE_TOLERANCE,
   NOTE_CLOSED_AFTER_GAP,
   NOTE_HOLE,
   applyEvent,
   applyMessage,
   applySnapshot,
+  applyTick,
   applyTransport,
   createRunState,
   selectAttempt,
@@ -275,5 +277,67 @@ describe('applyEvent directly', () => {
   test('a duplicate returns the same state object', () => {
     const s = fold(CLEAN.slice(0, 3))
     expect(applyEvent(s, CLEAN[1]!)).toBe(s)
+  })
+})
+
+describe('O5: a hole with nothing after it', () => {
+  // read_plate's step.finished (seq 27) lost; only run.completed follows it.
+  const lostAtEnd = CLEAN.filter((e) => e.seq !== 27)
+  const T = 1_000_000
+
+  test('is not caught by counting, because too few events follow', () => {
+    expect(selectConnection(fold(lostAtEnd, live())).status).toBe('live')
+  })
+
+  test(`is reported once it has been open ${HOLE_TIMEOUT_MS} ms`, () => {
+    let s = applyTick(fold(lostAtEnd, live()), T)
+    expect(s.hole).toEqual({ seq: 27, since: T })
+    s = applyTick(s, T + HOLE_TIMEOUT_MS - 1)
+    expect(selectConnection(s).status).toBe('live')
+    s = applyTick(s, T + HOLE_TIMEOUT_MS)
+    expect(selectConnection(s)).toMatchObject({
+      status: 'stale',
+      note: NOTE_HOLE,
+    })
+  })
+
+  test('clears when the missing event is replayed', () => {
+    let s = applyTick(fold(lostAtEnd, live()), T)
+    s = applyTick(s, T + HOLE_TIMEOUT_MS)
+    s = applyMessage(
+      s,
+      CLEAN.find((e) => e.seq === 27),
+    )
+    expect(selectConnection(s).status).toBe('live')
+    s = applyTick(s, T + HOLE_TIMEOUT_MS + 250)
+    expect(s.hole).toBeNull()
+  })
+
+  test('restarts the timer when a different seq becomes the lowest missing', () => {
+    const twoHoles = CLEAN.filter((e) => e.seq !== 20 && e.seq !== 27)
+    let s = applyTick(
+      fold(
+        twoHoles.filter((e) => e.seq < 22),
+        live(),
+      ),
+      T,
+    )
+    expect(s.hole?.seq).toBe(20)
+    s = applyMessage(
+      s,
+      CLEAN.find((e) => e.seq === 20),
+    )
+    s = fold(
+      twoHoles.filter((e) => e.seq >= 22),
+      s,
+    )
+    s = applyTick(s, T + HOLE_TIMEOUT_MS + 100)
+    expect(s.hole).toEqual({ seq: 27, since: T + HOLE_TIMEOUT_MS + 100 })
+    expect(selectConnection(s).status).toBe('live')
+  })
+
+  test('a tick with nothing missing returns the same state', () => {
+    const s = fold(CLEAN, live())
+    expect(applyTick(s, T)).toBe(s)
   })
 })

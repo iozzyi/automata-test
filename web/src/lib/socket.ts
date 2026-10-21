@@ -15,7 +15,16 @@ export interface SocketHandlers {
   resumeFrom: () => number
 }
 
-export function connect(runId: string, h: SocketHandlers): () => void {
+export interface SocketControl {
+  /** Close for good. */
+  close: () => void
+  /** Drop the current connection and open a new one straight away, resuming
+   *  from wherever the run state says. Used to have the server replay a seq
+   *  that went missing on a live connection. */
+  reconnect: () => void
+}
+
+export function connect(runId: string, h: SocketHandlers): SocketControl {
   let ws: WebSocket | null = null
   let stopped = false
   let backoff = 250
@@ -45,9 +54,15 @@ export function connect(runId: string, h: SocketHandlers): () => void {
   }
 
   open()
-  return () => {
-    stopped = true
-    if (timer) clearTimeout(timer)
-    ws?.close()
+  return {
+    close: () => {
+      stopped = true
+      if (timer) clearTimeout(timer)
+      ws?.close()
+    },
+    reconnect: () => {
+      backoff = 250
+      ws?.close() // onclose schedules the next attempt
+    },
   }
 }

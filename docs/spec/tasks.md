@@ -72,6 +72,7 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 - [x] T5.6 Manual: `REORDER_PCT=30 DUPLICATE_PCT=20` → the run converges to 7 green bars. Note whether the hole warning ever flashes at tolerance 10 (for NOTES).
 - **Done when:** all four README commands are green. ✅ 16:47: pytest 51/51 (4 new websocket tests), vitest 94/94, acceptance 3/3, check-disconnect 2/2.
   - Gap run (kill 2.5 s, reject 6 s, buffer 2): gap frame `{from:8, earliest:18}`; banner gap, then "Disconnected. Part of this run was also not recorded.", then gap again (sticky); next resume asked from 22, not 8 (write-off works); run completed with 2 bars still striped, as in `docs/timeline-gap.png`; 2 steps missing entirely.
+  - O5 fix re-run, reorder 30 / duplicate 20, 4 runs: run 1 lost an event mid-run; the hole warning showed, the page reconnected from 17 by itself, and the run ended complete and live. Runs 3–4 lost their *final* event (`run.completed`, held by the knob with nothing after it) → O6. acceptance 3/3 and check-disconnect 2/2 still green after the change.
   - Reorder 30 / duplicate 20, 3 runs: 2–6 duplicates and 2–4 out-of-order per run; runs 1–2 converged to 7 green bars. Run 3: one false "update lost" flash that cleared, and **one event lost for good at the end** (`read_plate` finished, held by the reorder knob and never released): screen showed completed + live with a running bar, because fewer than 10 events followed the hole. See O5 in design §6.
 
 ## T6. NOTES.md (≈30 min, protected) · R15

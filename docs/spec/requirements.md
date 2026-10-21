@@ -92,6 +92,8 @@ Words used throughout:
 2. Events after the hole SHALL still be applied immediately. Nothing waits for the hole. **[gate]** "the run keeps moving…"
 3. WHEN the missing seq arrives (or is written off by a gap frame), THE hole warning SHALL clear.
 4. A complete stream SHALL stay `live`. **[gate]**
+5. WHEN a seq has been missing for 2 s of wall-clock time, THE connection SHALL report `stale` with the same note, however few later events have arrived (O5: at the end of a run there may be none to count). The page feeds the time in with `applyTick(state, now)`; `runState.ts` never reads a clock. **[new test]**
+6. WHEN a missing seq is reported on a live connection, THE page SHALL reconnect once for that seq, resuming from below it, so the server replays it from its buffer (or sends a gap frame if it can't). **[manual]**
 
 ### R8. Say when the screen isn't being updated (rung 3)
 

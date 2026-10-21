@@ -7,11 +7,13 @@ import { NeedsAttention } from '../components/NeedsAttention'
 import { Timeline } from '../pages/Timeline'
 import { createRun, fetchSnapshot, retryStep, startRun } from '../lib/api'
 import { connect } from '../lib/socket'
+import type { SocketControl } from '../lib/socket'
 import {
   applyMessage,
   applyRetryRequested,
   applyRetryResult,
   applySnapshot,
+  applyTick,
   applyTransport,
   createRunState,
   selectAttempt,
@@ -20,6 +22,7 @@ import {
   selectResumeFrom,
   selectRunStatus,
   selectTracks,
+  NOTE_HOLE,
 } from '../lib/runState'
 import type { RunState } from '../lib/runState'
 
@@ -33,17 +36,38 @@ export function RunPage() {
   } | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
+  const socketRef = useRef<SocketControl | null>(null)
+  const refilled = useRef<number | null>(null)
 
-  // The clock a running bar is drawn against.
+  // The clock a running bar is drawn against, and that times out a missing
+  // event (the state layer never reads a clock itself).
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 250)
+    const t = setInterval(() => {
+      const at = Date.now()
+      setNow(at)
+      setState((s) => applyTick(s, at))
+    }, 250)
     return () => clearInterval(t)
   }, [])
+
+  // An event went missing on a live connection. The server still holds it in
+  // its replay buffer, so reconnect: the resume position stops below the hole,
+  // and the replay fills it (or the server says it is gone, as a gap). Once per
+  // missing seq, so a hole the server cannot fill does not loop.
+  const holeSeq = state.hole?.seq ?? null
+  const holeReported =
+    state.connection.status === 'stale' && state.connection.note === NOTE_HOLE
+  useEffect(() => {
+    if (!holeReported || holeSeq === null || refilled.current === holeSeq)
+      return
+    refilled.current = holeSeq
+    socketRef.current?.reconnect()
+  }, [holeReported, holeSeq])
 
   useEffect(() => {
     if (!runId) return
     const alive = { current: true }
-    let close: (() => void) | undefined
+    refilled.current = null
     void (async () => {
       // Snapshot first, then subscribe from where the snapshot sits. That is
       // what selectResumeFrom is for. Each run starts from a fresh state, so a
@@ -59,7 +83,7 @@ export function RunPage() {
       // React re-renders, so the ref has to hold the snapshot already.
       stateRef.current = fresh
       setState(fresh)
-      close = connect(runId, {
+      socketRef.current = connect(runId, {
         resumeFrom: () => selectResumeFrom(stateRef.current),
         onMessage: (msg) => setState((s) => applyMessage(s, msg)),
         onOpen: () => setState((s) => applyTransport(s, 'open')),
@@ -68,7 +92,8 @@ export function RunPage() {
     })()
     return () => {
       alive.current = false
-      close?.()
+      socketRef.current?.close()
+      socketRef.current = null
     }
   }, [runId])
 
