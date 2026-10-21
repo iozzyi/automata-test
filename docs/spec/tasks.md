@@ -89,7 +89,8 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 
 - [x] T7.1 Loop 1: QA-lead subagent review against README. All gates green, every README item Met; 15 gaps, none labelled Critical. QA-1 to QA-4 fixed (design §6), 11 regression tests (`web/tests/runState.qa.test.ts`), 110/110 vitest, acceptance 3/3, check-disconnect 2/2, live gap+failure run: snapshot re-read on the gap completed the bars and showed the card.
 - [x] T7.2 Loop 2: fixes confirmed; QA-16 (regression from the QA-1 fix) and QA-18 fixed; 7 new tests (117/117); mutation check: the old gap re-read fails 3 of them; acceptance 3/3, check-disconnect 2/2.
-- [ ] T7.3 Loop 3: re-review.
+- [x] T7.3 Loop 3: QA-16 and QA-18 confirmed closed; no new Critical gaps, so the loop stops (3 of 3 used). New: QA-20 (gap re-read dropped if the run id is still unknown; needs the initial snapshot to fail too) and QA-21 (snapshot time can win over the event's `at` by <1 ms), left for NOTES.
+- [x] T7.4 NOTES.md corrected for what the loops changed (snapshot re-read is now built) and what they found (QA-5/6/7/9/17).
 
 ## Traceability
 
