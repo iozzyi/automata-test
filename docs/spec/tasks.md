@@ -83,7 +83,7 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 - [x] T6.4 Never-seen step: design §3.8.
 - [x] T6.5 Contract changes before integrators build on it: **a heartbeat frame carrying the watermark (O6: a lost final event is otherwise undetectable; also catches a half-dead socket on a long blocked run)**; add a `step.retry_requested` event (a retry is silent today); put `seq` on the gap frame or version the frames; an `attempt` on the snapshot's step history; keep `seq`/`at`/`attempt` keys and the 202/409/422 codes stable.
 - [x] T6.6 Feedback on the exercise: README `cd ../web` typo; RunPage comment vs. code race; `step.refused` carrying `attempt + 1`; what had to be guessed.
-- [ ] T6.7 Final commit; check the submission list in the README.
+- [x] T6.7 Final commit; check the submission list in the README.
 
 ## T7. QA review loops (≈30 min)
 
