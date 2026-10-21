@@ -2,7 +2,7 @@
 
 > Spec 3 of 3 · [requirements](requirements.md) → [design](design.md) → [tasks](tasks.md)
 > Status: v1.0 · 2026-10-21 · Tick boxes as we go. Each task names the requirements it satisfies and how we know it's done.
-> Time budget: about 1.5 h spent on planning (14:15–15:45), plus spec writing (15:45–~16:15). Target for the rest is about 3 h, with 30 min kept for NOTES.
+> Time budget: about 1.5 h spent on planning (14:15–15:45), plus spec writing (15:45–16:00). Target for the rest is about 3 h, with 30 min kept for NOTES.
 
 Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–4 → NOTES. Problem 2 only needs rungs 1–2. If time runs short, T5 is what we drop, and we say so in NOTES.
 
@@ -10,18 +10,18 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 
 - [x] T0.1 Commit the untouched starter, then the solution outline (`37cf299`, `564c4b4`).
 - [x] T0.2 Commit `CLAUDE.md` and `docs/spec/*` ("Add spec: requirements, design, tasks").
-- [ ] T0.3 Check prerequisites: `docker --version`, `node -v` (22), `pnpm -v` (11), `uv --version`, then `uv sync`, `cd web && pnpm install && pnpm exec playwright install chromium`.
-- [ ] T0.4 Baseline: `uv run pytest` and `cd web && pnpm test` fail as the README says (only the engine tests pass). Record the counts in `docs/WORKLOG.md`.
-- [ ] T0.5 *(you)* `brew install gh && gh auth login`, then `gh repo create automata-test --private --source=. --remote=origin --push`.
+- [x] T0.3 Check prerequisites (installed via Homebrew: uv, node@22 (keg-only, needs `/opt/homebrew/opt/node@22/bin` on PATH), pnpm 12 (project pins 11.26.0); Python pinned to 3.12 in `.python-version` to match the Docker image; **Docker not installed**: run the simulator with `uv run` instead): `docker --version`, `node -v` (22), `pnpm -v` (11), `uv --version`, then `uv sync`, `cd web && pnpm install && pnpm exec playwright install chromium`.
+- [x] T0.4 Baseline: `uv run pytest` and `cd web && pnpm test` fail as the README says (only the engine tests pass). Record the counts in `docs/WORKLOG.md`.
+- [x] T0.5 *(you)* `brew install gh && gh auth login`, then `gh repo create automata-test --private --source=. --remote=origin --push`.
 - [ ] T0.6 Bring `docs/SOLUTION_OUTLINE.md` §8 up to date (it still says "pending"; the decisions are settled), and fix diagram 6.3/6.4 "draft" labels.
 
 ## T1. Rung 1: number the events (`stream.py`) (≈30 min) · R1, R2.1–R2.3, R3, R4.1–R4.3
 
-- [ ] T1.1 `_seq`, `_buf` deque, `publish` assigns seq and buffers (design §2.2 step 1). `watermark()`, `earliest()`.
-- [ ] T1.2 `subscribe` computes backlog, gap and `earliest` atomically; add `Subscription.earliest` with a default (§2.3).
-- [ ] T1.3 Slow-viewer policy: `_Viewer` with `over_since`; 256 / 2 s / 512; disconnect = clear + `None` + remove; `sleep(0)` after the lock (§2.2).
-- [ ] T1.4 `tests/test_spec.py`: 512 limit, 2 s grace with a fake clock, grace cancelled when the queue drains, resume above watermark → gap, resume 0 after eviction → gap, `earliest` equals `backlog[0].seq`, no loss or duplicate when subscribing mid-publish.
-- **Done when:** `uv run pytest` has the 4 stream gates and the T1.4 tests green.
+- [x] T1.1 `_seq`, `_buf` deque, `publish` assigns seq and buffers (design §2.2 step 1). `watermark()`, `earliest()`.
+- [x] T1.2 `subscribe` computes backlog, gap and `earliest` atomically; add `Subscription.earliest` with a default (§2.3).
+- [x] T1.3 Slow-viewer policy: `_Viewer` with `over_since`; 256 / 2 s / 512; disconnect = clear + `None` + remove; `sleep(0)` after the lock (§2.2).
+- [x] T1.4 `tests/test_spec.py`: 512 limit, 2 s grace with a fake clock, grace cancelled when the queue drains, resume above watermark → gap, resume 0 after eviction → gap, `earliest` equals `backlog[0].seq`, no loss or duplicate when subscribing mid-publish.
+- **Done when:** `uv run pytest` has the 4 stream gates and the T1.4 tests green. ✅ 16:12: 23/24 green (the 1 left is the retry gate, T3); ruff + mypy strict clean.
 
 ## T2. Rung 2: fold events into state (`runState.ts`) (≈50 min) · R5, R6, R7, R8.1–R8.2
 
