@@ -9,6 +9,7 @@ import { createRun, fetchSnapshot, retryStep, startRun } from '../lib/api'
 import { connect } from '../lib/socket'
 import type { SocketControl } from '../lib/socket'
 import {
+  applyGapSnapshot,
   applyMessage,
   applyRetryRequested,
   applyRetryResult,
@@ -65,7 +66,8 @@ export function RunPage() {
   // Part of the run could not be replayed. The events are gone, but the
   // present is not: re-read the snapshot so a failure that happened inside the
   // gap still gets its card, and bars that finished in it get their end. The
-  // merge only moves forward, so this cannot undo anything newer.
+  // merge only moves forward, so this cannot undo anything newer, and it does
+  // not move the stream position, so events still on their way still apply.
   const gaps = state.gaps
   useEffect(() => {
     if (!runId || gaps === 0) return
@@ -73,7 +75,7 @@ export function RunPage() {
     fetchSnapshot(runId)
       .then((snap) => {
         if (alive && stateRef.current.runId === runId) {
-          setState((s) => applySnapshot(s, snap))
+          setState((s) => applyGapSnapshot(s, snap))
         }
       })
       .catch(() => {

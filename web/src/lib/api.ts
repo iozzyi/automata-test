@@ -17,9 +17,20 @@ export async function listRuns(): Promise<{ id: string; status: string }[]> {
   return (await r.json()).runs
 }
 
+/** Rejects unless the server answered with something shaped like a snapshot,
+ *  so a 404 or an error page never reaches the state layer. */
 export async function fetchSnapshot(id: string): Promise<Snapshot> {
-  const r = await fetch(`${BASE}/runs/${id}`)
-  return (await r.json()) as Snapshot
+  const r = await fetch(`${BASE}/runs/${encodeURIComponent(id)}`)
+  if (!r.ok) throw new Error(`snapshot for ${id}: HTTP ${r.status}`)
+  const body = (await r.json()) as Partial<Snapshot> | null
+  if (
+    typeof body?.seq !== 'number' ||
+    typeof body.run?.id !== 'string' ||
+    !Array.isArray(body.run.steps)
+  ) {
+    throw new Error(`snapshot for ${id}: unexpected shape`)
+  }
+  return body as Snapshot
 }
 
 /** 202 from the retry endpoint. Accepted, not done: only step.dispatched for

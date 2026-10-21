@@ -88,7 +88,8 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 ## T7. QA review loops (≈30 min)
 
 - [x] T7.1 Loop 1: QA-lead subagent review against README. All gates green, every README item Met; 15 gaps, none labelled Critical. QA-1 to QA-4 fixed (design §6), 11 regression tests (`web/tests/runState.qa.test.ts`), 110/110 vitest, acceptance 3/3, check-disconnect 2/2, live gap+failure run: snapshot re-read on the gap completed the bars and showed the card.
-- [ ] T7.2 Loop 2: re-review.
+- [x] T7.2 Loop 2: fixes confirmed; QA-16 (regression from the QA-1 fix) and QA-18 fixed; 7 new tests (117/117); mutation check: the old gap re-read fails 3 of them; acceptance 3/3, check-disconnect 2/2.
+- [ ] T7.3 Loop 3: re-review.
 
 ## Traceability
 

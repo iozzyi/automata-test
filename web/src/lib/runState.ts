@@ -176,6 +176,38 @@ export function createRunState(): RunState {
  * events it already accounts for: those are ignored from here on.
  */
 export function applySnapshot(state: RunState, snap: Snapshot): RunState {
+  const merged = mergeSnapshotSteps(state, snap)
+  const floor = Math.max(state.floor, snap.seq)
+  const [contiguous, seen] = advance(
+    Math.max(state.contiguous, floor),
+    state.seen,
+  )
+  return finish({
+    ...merged,
+    runId: snap.run.id,
+    floor,
+    contiguous,
+    seen,
+  })
+}
+
+/**
+ * Fold in a snapshot re-read after a gap frame, to recover the present the
+ * gap swallowed (a failure needing a card, a bar that has since ended).
+ *
+ * Unlike applySnapshot it does not move the stream position: events at or
+ * below the snapshot's seq may still be on their way (the backlog, or held up
+ * on the wire), and they carry what the snapshot cannot -- earlier attempts,
+ * their errors, refusals. They are applied when they arrive, and the merge
+ * only moves forward, so applying both is harmless. A snapshot of another run
+ * is ignored.
+ */
+export function applyGapSnapshot(state: RunState, snap: Snapshot): RunState {
+  if (state.runId !== null && snap.run.id !== state.runId) return state
+  return finish(mergeSnapshotSteps(state, snap))
+}
+
+function mergeSnapshotSteps(state: RunState, snap: Snapshot): RunState {
   let byKey = state.byKey
   for (const step of snap.run.steps) {
     const status = step.status as AttemptStatus
@@ -196,21 +228,11 @@ export function applySnapshot(state: RunState, snap: Snapshot): RunState {
       }),
     }
   }
-
-  const floor = Math.max(state.floor, snap.seq)
-  const [contiguous, seen] = advance(
-    Math.max(state.contiguous, floor),
-    state.seen,
-  )
-  return finish({
+  return {
     ...state,
-    runId: snap.run.id,
     runStatus: laterRunStatus(state.runStatus, snap.run.status),
     byKey,
-    floor,
-    contiguous,
-    seen,
-  })
+  }
 }
 
 /**

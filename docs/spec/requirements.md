@@ -60,7 +60,7 @@ Words used throughout:
 6. THE `gap` status SHALL be sticky: reconnecting SHALL NOT bring back `live`. **[gate]** vitest "reconnecting after a gap…"
 7. THE browser SHALL write off seqs `from+1 … earliest-1`, so that later resumes don't ask for them again.
 8. WHEN a bar's `finished` or `failed` event fell inside the gap, THE bar SHALL stay `running` with no end until the page has re-read the snapshot. The screen doesn't claim to know it ended. **[manual]** gap knobs
-9. WHEN a gap frame arrives, THE page SHALL re-read the snapshot and merge it forward-only, so a failure that happened inside the gap still gets its card and finished bars get their end from the server's record. The gap banner stays. (Added after QA review, QA-1.) **[new test]** + **[manual]**
+9. WHEN a gap frame arrives, THE page SHALL re-read the snapshot and merge it forward-only *without moving the stream position* (so events still on their way still apply: QA-16), so a failure that happened inside the gap still gets its card and finished bars get their end from the server's record. The gap banner stays. (Added after QA review, QA-1.) **[new test]** + **[manual]**
 
 ### R5. Fold events in any order (rung 2, decision B)
 
