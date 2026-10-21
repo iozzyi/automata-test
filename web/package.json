@@ -1,0 +1,39 @@
+{
+  "name": "lab-run-monitor",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.26.0",
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 3000",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check:types": "tsc --noEmit",
+    "format": "eslint --fix && prettier --write .",
+    "check": "eslint && prettier --check .",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "d3-scale": "^4.0.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@tailwindcss/vite": "^4.1.18",
+    "@tanstack/eslint-config": "^0.4.0",
+    "@types/d3-scale": "^4.0.9",
+    "@types/node": "^24.1.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.39.5",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.11"
+  }
+}

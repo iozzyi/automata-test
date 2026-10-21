@@ -1,0 +1,18 @@
+# The simulator only. The web app runs on your machine with `pnpm dev` -- you
+# need Node locally for the tests anyway, and a container in front of Vite buys
+# nothing but a slower reload.
+services:
+  simulator:
+    build:
+      context: .
+      dockerfile: simulator/Dockerfile
+    ports:
+      - "5002:5002"
+    environment:
+      # Every knob is off by default. See README.md.
+      REPLAY_BUFFER_SIZE: "${REPLAY_BUFFER_SIZE:-64}"
+      FAIL_STEP: "${FAIL_STEP:-}"
+      REORDER_PCT: "${REORDER_PCT:-0}"
+      DUPLICATE_PCT: "${DUPLICATE_PCT:-0}"
+      SOCKET_KILL_MS: "${SOCKET_KILL_MS:-0}"
+      SOCKET_REJECT_MS: "${SOCKET_REJECT_MS:-0}"

@@ -1,0 +1,262 @@
+[
+  {
+    "seq": 1,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "fill_sample_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:09.435232Z"
+  },
+  {
+    "seq": 2,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "fill_sample_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:09.535203Z"
+  },
+  {
+    "seq": 3,
+    "run_id": "r-1",
+    "type": "step.finished",
+    "step_id": "fill_sample_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:11.535173Z"
+  },
+  {
+    "seq": 4,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "incubate_samples",
+    "attempt": 1,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:11.535181Z"
+  },
+  {
+    "seq": 5,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "fill_reagent_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:11.535182Z"
+  },
+  {
+    "seq": 6,
+    "run_id": "r-1",
+    "type": "step.refused",
+    "step_id": "fill_buffer_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:11.535182Z"
+  },
+  {
+    "seq": 7,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "incubate_samples",
+    "attempt": 1,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:11.634563Z"
+  },
+  {
+    "seq": 8,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "fill_reagent_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:11.634565Z"
+  },
+  {
+    "seq": 9,
+    "run_id": "r-1",
+    "type": "step.finished",
+    "step_id": "fill_reagent_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:13.635184Z"
+  },
+  {
+    "seq": 10,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "fill_buffer_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:13.635196Z"
+  },
+  {
+    "seq": 11,
+    "run_id": "r-1",
+    "type": "step.refused",
+    "step_id": "warm_reagent_plate",
+    "attempt": 1,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:13.635197Z"
+  },
+  {
+    "seq": 12,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "fill_buffer_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:13.73475Z"
+  },
+  {
+    "seq": 13,
+    "run_id": "r-1",
+    "type": "step.finished",
+    "step_id": "incubate_samples",
+    "attempt": 1,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:15.634381Z"
+  },
+  {
+    "seq": 14,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "warm_reagent_plate",
+    "attempt": 1,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:15.634388Z"
+  },
+  {
+    "seq": 15,
+    "run_id": "r-1",
+    "type": "step.finished",
+    "step_id": "fill_buffer_plate",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:15.734355Z"
+  },
+  {
+    "seq": 16,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "warm_reagent_plate",
+    "attempt": 1,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:15.734357Z"
+  },
+  {
+    "seq": 17,
+    "run_id": "r-1",
+    "type": "step.failed",
+    "step_id": "warm_reagent_plate",
+    "attempt": 1,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:18.735112Z",
+    "error": {
+      "code": "SETPOINT_NOT_REACHED",
+      "instrument": "incubator-1",
+      "detail": "chamber did not reach 37.0C within tolerance",
+      "retryable": true,
+      "context": {
+        "actual_c": 31.2,
+        "door_cycles": 2,
+        "elapsed_s": 180,
+        "labware": "PLT-00421",
+        "target_c": 37,
+        "tolerance_c": 0.5
+      }
+    }
+  },
+  {
+    "seq": 18,
+    "run_id": "r-1",
+    "type": "run.blocked",
+    "at": "2026-09-01T15:51:18.735118Z"
+  },
+  {
+    "seq": 19,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "warm_reagent_plate",
+    "attempt": 2,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:18.834497Z"
+  },
+  {
+    "seq": 20,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "warm_reagent_plate",
+    "attempt": 2,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:18.935107Z"
+  },
+  {
+    "seq": 21,
+    "run_id": "r-1",
+    "type": "step.finished",
+    "step_id": "warm_reagent_plate",
+    "attempt": 2,
+    "device_id": "incubator-1",
+    "at": "2026-09-01T15:51:21.935155Z"
+  },
+  {
+    "seq": 22,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "combine",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:21.935172Z"
+  },
+  {
+    "seq": 23,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "combine",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:22.034271Z"
+  },
+  {
+    "seq": 24,
+    "run_id": "r-1",
+    "type": "step.finished",
+    "step_id": "combine",
+    "attempt": 1,
+    "device_id": "liquid-handler-1",
+    "at": "2026-09-01T15:51:24.034526Z"
+  },
+  {
+    "seq": 25,
+    "run_id": "r-1",
+    "type": "step.dispatched",
+    "step_id": "read_plate",
+    "attempt": 1,
+    "device_id": "plate-reader-1",
+    "at": "2026-09-01T15:51:24.034539Z"
+  },
+  {
+    "seq": 26,
+    "run_id": "r-1",
+    "type": "step.started",
+    "step_id": "read_plate",
+    "attempt": 1,
+    "device_id": "plate-reader-1",
+    "at": "2026-09-01T15:51:24.135088Z"
+  },
+  {
+    "seq": 27,
+    "run_id": "r-1",
+    "type": "step.finished",
+    "step_id": "read_plate",
+    "attempt": 1,
+    "device_id": "plate-reader-1",
+    "at": "2026-09-01T15:51:26.134506Z"
+  },
+  {
+    "seq": 28,
+    "run_id": "r-1",
+    "type": "run.completed",
+    "at": "2026-09-01T15:51:26.13452Z"
+  }
+]
