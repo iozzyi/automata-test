@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
 from simulator.api import Config, create_app
 from simulator.engine import DISPATCHED, DONE, FAILED, PENDING, RUNNING, Run
@@ -414,3 +415,55 @@ async def test_concurrent_retries_claim_exactly_once(
 
     assert all(r.status_code == 202 for r in results)
     assert sorted(r.json()["duplicate"] for r in results) == [False] + [True] * 9
+
+
+# ---------------------------------------------------------------------------
+# R4.4: the gap frame on the wire (api.py TASK block)
+# ---------------------------------------------------------------------------
+
+
+def _ws_app(buf: int, published: int) -> tuple[TestClient, str]:
+    """A test client with one run whose stream has `published` events in it.
+    Events go in through the app's own event loop, as the engine's would."""
+    app = create_app(Config(replay_buffer_size=buf))
+    client = TestClient(app)
+    client.__enter__()
+    run_id = client.post("/runs").json()["id"]
+    stream = app.state.server.streams[run_id]
+    for _ in range(published):
+        event = Event(run_id=run_id, type=STEP_STARTED, at="2026-09-02T00:00:00Z")
+        assert client.portal is not None
+        client.portal.call(stream.publish, event)
+    return client, run_id
+
+
+@pytest.mark.parametrize(
+    ("resume_from", "earliest"),
+    [
+        (2, 7),  # evicted: the buffer holds 7-10
+        (0, 7),  # a first connection is not special
+        (50, 7),  # ahead of the server, e.g. after a restart
+    ],
+)
+def test_an_unservable_resume_is_told_first_then_gets_what_is_held(
+    resume_from: int, earliest: int
+) -> None:
+    client, run_id = _ws_app(buf=4, published=10)
+    try:
+        with client.websocket_connect(f"/ws?run_id={run_id}&resume_from={resume_from}") as ws:
+            assert ws.receive_json() == {"type": "gap", "from": resume_from, "earliest": earliest}
+            if resume_from < earliest:
+                assert [ws.receive_json()["seq"] for _ in range(4)] == [7, 8, 9, 10]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_a_servable_resume_gets_no_gap_frame() -> None:
+    client, run_id = _ws_app(buf=4, published=10)
+    try:
+        with client.websocket_connect(f"/ws?run_id={run_id}&resume_from=7") as ws:
+            first = ws.receive_json()
+            assert "type" in first and first["type"] != "gap"
+            assert [first["seq"]] + [ws.receive_json()["seq"] for _ in range(2)] == [8, 9, 10]
+    finally:
+        client.__exit__(None, None, None)

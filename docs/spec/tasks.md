@@ -64,13 +64,15 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 
 ## T5. Rungs 3–4: reconnect and gap (≈30 min) · R2.4, R4.4–R4.8, R8.3
 
-- [ ] T5.1 `api.py` TASK: send the gap frame (§2.4).
+- [x] T5.1 `api.py` TASK: send the gap frame (§2.4).
 - [x] T5.2 (done early in T2: two provided vitest gates need it) `runState.ts`: `applyGap` (sticky, write off), closed-after-gap note.
-- [ ] T5.3 `tests/test_spec.py`: websocket test that the first frame after an unservable resume is the gap frame, then the backlog.
-- [ ] T5.4 `./scripts/check-disconnect.sh` green.
-- [ ] T5.5 Manual: `SOCKET_KILL_MS=2500 SOCKET_REJECT_MS=6000 REPLAY_BUFFER_SIZE=2` → rose banner, it stays after reconnect, and some bars stay striped (matches `docs/timeline-gap.png`).
-- [ ] T5.6 Manual: `REORDER_PCT=30 DUPLICATE_PCT=20` → the run converges to 7 green bars. Note whether the hole warning ever flashes at tolerance 10 (for NOTES).
-- **Done when:** all four README commands are green.
+- [x] T5.3 `tests/test_spec.py`: websocket test that the first frame after an unservable resume is the gap frame, then the backlog.
+- [x] T5.4 `./scripts/check-disconnect.sh` green.
+- [x] T5.5 Manual: `SOCKET_KILL_MS=2500 SOCKET_REJECT_MS=6000 REPLAY_BUFFER_SIZE=2` → rose banner, it stays after reconnect, and some bars stay striped (matches `docs/timeline-gap.png`).
+- [x] T5.6 Manual: `REORDER_PCT=30 DUPLICATE_PCT=20` → the run converges to 7 green bars. Note whether the hole warning ever flashes at tolerance 10 (for NOTES).
+- **Done when:** all four README commands are green. ✅ 16:47: pytest 51/51 (4 new websocket tests), vitest 94/94, acceptance 3/3, check-disconnect 2/2.
+  - Gap run (kill 2.5 s, reject 6 s, buffer 2): gap frame `{from:8, earliest:18}`; banner gap, then "Disconnected. Part of this run was also not recorded.", then gap again (sticky); next resume asked from 22, not 8 (write-off works); run completed with 2 bars still striped, as in `docs/timeline-gap.png`; 2 steps missing entirely.
+  - Reorder 30 / duplicate 20, 3 runs: 2–6 duplicates and 2–4 out-of-order per run; runs 1–2 converged to 7 green bars. Run 3: one false "update lost" flash that cleared, and **one event lost for good at the end** (`read_plate` finished, held by the reorder knob and never released): screen showed completed + live with a running bar, because fewer than 10 events followed the hole. See O5 in design §6.
 
 ## T6. NOTES.md (≈30 min, protected) · R15
 

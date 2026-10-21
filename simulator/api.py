@@ -201,20 +201,19 @@ async def _serve_ws(server: Server, ws: WebSocket) -> None:
 
     try:
         if sub.gap:
-            # ---------------------------------------------------------------
-            # TASK. The client asked to resume from a position the buffer no
-            # longer holds, so some of the run happened and nobody can replay
-            # it.
+            # The client asked to resume from a position the buffer no longer
+            # holds (or from beyond anything published), so some of the run
+            # happened and cannot be replayed to it. Say so before anything
+            # else, in a frame that cannot be mistaken for an event (no seq):
             #
-            # Sending nothing here is the same as pretending it did not happen:
-            # the socket simply goes live, the client carries on from the next
-            # event, and a failure and its retry are missing from the timeline
-            # with nothing to say so. It looks correct and it is not.
+            #   {"type": "gap", "from": <resume_from>, "earliest": <oldest held>}
             #
-            # Decide what the client is told, and make sure the client can tell
-            # this apart from a clean resume. The shape is yours.
-            # ---------------------------------------------------------------
-            pass
+            # Seqs from+1 .. earliest-1 are lost to this client. What is still
+            # held follows as the usual backlog, then live events. The client
+            # shows the record as incomplete and writes the range off, so later
+            # resumes do not ask for it again. earliest was captured with the
+            # backlog, so the two always agree. See docs/spec/design.md 2.4.
+            await ws.send_json({"type": "gap", "from": resume_from, "earliest": sub.earliest})
 
         for event in sub.backlog:
             await ws.send_json(event.as_dict())
