@@ -2,7 +2,7 @@
 // without restarting it. Talks to the simulator-only PUT /config; a real lab
 // would have nothing like it, which is why it is labelled as it is.
 import { useEffect, useState } from 'react'
-import { getConfig, setConfig } from '../lib/api'
+import { getConfig, resetSimulator, setConfig } from '../lib/api'
 import type { SimConfig } from '../lib/api'
 
 const OFF: SimConfig = {
@@ -75,7 +75,12 @@ export const SCENARIOS: Scenario[] = [
 const same = (a: SimConfig, b: SimConfig) =>
   (Object.keys(OFF) as (keyof SimConfig)[]).every((k) => a[k] === b[k])
 
-export function ScenarioPicker() {
+export function ScenarioPicker({
+  onReset,
+}: {
+  /** Called after the simulator has been reset, so the page can clear too. */
+  onReset: () => void
+}) {
   const [config, setCurrent] = useState<SimConfig | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -113,6 +118,22 @@ export function ScenarioPicker() {
     }
   }
 
+  const reset = async () => {
+    if (!window.confirm('Delete all runs and reset the simulator?')) return
+    setBusy(true)
+    try {
+      setCurrent(await resetSimulator())
+      onReset()
+      setMessage('Reset: no runs, clean scenario.')
+    } catch (e) {
+      setMessage(
+        `Reset failed, nothing was cleared: ${e instanceof Error ? e.message : 'unknown error'}`,
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div
       data-testid="scenario-picker"
@@ -137,7 +158,17 @@ export function ScenarioPicker() {
           <option value="custom">Custom (set outside the page)</option>
         )}
       </select>
-      <span aria-live="polite" className="text-slate-600">
+      <button
+        type="button"
+        data-testid="reset-simulator"
+        disabled={busy}
+        onClick={() => void reset()}
+        title="Stop and delete every run, and go back to the clean scenario"
+        className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
+      >
+        Reset
+      </button>
+      <span aria-live="polite" className="basis-full text-slate-600">
         {message ?? active?.hint ?? ''}
       </span>
     </div>

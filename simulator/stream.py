@@ -139,6 +139,13 @@ class Stream:
         async with self._lock:
             return self._buf[0].seq if self._buf else 0
 
+    async def close(self) -> None:
+        """End every viewer's stream (each gets None) and take no more.
+        Used by the simulator's testing-only reset."""
+        async with self._lock:
+            for sub_id, viewer in list(self._subs.items()):
+                self._disconnect(sub_id, viewer)
+
     @staticmethod
     def _too_slow(viewer: _Viewer, now: float) -> bool:
         size = viewer.queue.qsize()

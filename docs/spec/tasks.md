@@ -101,6 +101,8 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 
 - [x] T8.5 QA review of R16–R18: no gaps labelled Critical; by our definition (false claims) QA-22, QA-24 and QA-25 are Critical and were fixed with QA-23, QA-27, QA-28 (wording) and QA-26 (reset hint). 4 new tests (132/132); browser: switching runs starts from an empty state (old bars never shown under the new id). QA-29 (no cap on replay_buffer_size) left as a nit. acceptance 3/3, check-disconnect 2/2.
 
+- [x] T8.6 R18.5–18.6 (Osman's request, 17:48): testing-only `POST /reset` (cancels run loops, ends open streams, deletes runs so ids restart at r-1, knobs back to clean) and a Reset button with confirmation in the scenario box. 1 pytest test (64/64); vitest 132/132; acceptance 3/3, check-disconnect 2/2; browser: Reset mid-run returned the page to "No run open", empty list, Clean run; simulator confirmed `runs: []`. Not QA-reviewed.
+
 ## Traceability
 
 | Requirement | Tasks |

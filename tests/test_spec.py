@@ -537,3 +537,38 @@ async def test_bad_config_is_rejected_and_changes_nothing(body: bytes) -> None:
         assert res.status_code == 400
         assert res.json()["code"] == "INVALID_CONFIG"
     assert app.state.server.cfg == Config()
+
+
+# ---------------------------------------------------------------------------
+# R18.5: starting over (POST /reset)
+# ---------------------------------------------------------------------------
+
+
+async def test_reset_stops_runs_ends_streams_and_starts_over() -> None:
+    app = create_app(Config())
+    server = app.state.server
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://sim") as client:
+        await client.put("/config", json={"fail_step": "read_plate", "reorder_pct": 30})
+        run_id = (await client.post("/runs")).json()["id"]
+        await client.post(f"/runs/{run_id}/start")
+        run = server.runs[run_id]
+        viewer = await server.streams[run_id].subscribe(0)
+
+        res = await client.post("/reset")
+
+        assert res.status_code == 200
+        assert res.json()["config"] == {
+            "fail_step": "",
+            "reorder_pct": 0,
+            "duplicate_pct": 0,
+            "socket_kill_ms": 0,
+            "socket_reject_ms": 0,
+            "replay_buffer_size": 64,
+        }
+        await asyncio.sleep(0)
+        assert run._task is not None and run._task.cancelled(), "the engine loop must stop"
+        assert _drain(viewer.queue)[-1] is None, "an open viewer must be told the stream ended"
+        assert (await client.get("/runs")).json() == {"runs": []}
+        assert (await client.get(f"/runs/{run_id}")).status_code == 404
+        assert (await client.post("/runs")).json()["id"] == "r-1"

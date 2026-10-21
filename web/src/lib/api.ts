@@ -93,6 +93,14 @@ export async function setConfig(cfg: Partial<SimConfig>): Promise<SimConfig> {
   return body.config
 }
 
+/** Start over: stop and delete every run, put every knob back to clean.
+ *  Testing only: see POST /reset. */
+export async function resetSimulator(): Promise<SimConfig> {
+  const r = await fetch(`${BASE}/reset`, { method: 'POST' })
+  if (!r.ok) throw new Error(`The simulator answered ${r.status}.`)
+  return ((await r.json()) as { config: SimConfig }).config
+}
+
 export async function retryStep(
   runId: string,
   stepId: string,

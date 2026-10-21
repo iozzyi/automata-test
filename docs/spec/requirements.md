@@ -210,7 +210,9 @@ Words used throughout:
 1. THE simulator SHALL accept `PUT /config` with any of its knobs (`fail_step`, `reorder_pct`, `duplicate_pct`, `socket_kill_ms`, `socket_reject_ms`, `replay_buffer_size`), validate them (percentages 0–100, times ≥ 0, buffer ≥ 1, `fail_step` empty or a workflow step), and answer with the full config as `GET /health` reports it. Unknown keys or bad values → 400 `INVALID_CONFIG`. **[new test]**
 2. Wire chaos SHALL apply at once; `fail_step` and `replay_buffer_size` SHALL apply to runs started afterwards. Changing the config SHALL also clear the reorder knob's held events and any reconnect lock-out.
 3. THE page SHALL offer named scenarios (clean; incubator fault; plate reader needs service; liquid handler fault; reorder and duplicate; dropped connection; unrecoverable gap), show which one is active, and say when it takes effect. It SHALL be labelled as a simulator testing control. `data-testid="scenario-picker"`
-4. This endpoint exists only because the simulator stands in for the lab; a real instrument fleet would not have it. The check scripts' "knob left on" warnings read `/health`, so they still warn.
+5. THE simulator SHALL accept `POST /reset` (testing only): stop every run's engine loop, end every open stream (viewers get the end-of-stream marker), delete all runs (ids start again at `r-1`), put every knob back to clean (no failure, no chaos, buffer 64), and clear held events and any reconnect lock-out. It answers with the clean config. **[new test]**
+6. THE scenario box SHALL have a **Reset** button (`data-testid="reset-simulator"`) that asks for confirmation ("Delete all runs and reset the simulator?"), calls `POST /reset`, then returns the page to "No run open" with an empty run list and the scenario showing Clean run. If the reset fails, the page SHALL say so and stay as it is.
+7. These endpoints exist only because the simulator stands in for the lab; a real instrument fleet would not have it. The check scripts' "knob left on" warnings read `/health`, so they still warn.
 
 ### R15. The note (required)
 

@@ -1,5 +1,5 @@
 """HTTP and WebSocket. Provided, except the TASK block in ``serve_ws`` and the
-simulator-only ``PUT /config`` (scenario switching for testing)."""
+simulator-only ``PUT /config`` and ``POST /reset`` (testing controls)."""
 
 from __future__ import annotations
 
@@ -109,6 +109,25 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         server._held = []
         server._open_from = 0.0
         return JSONResponse({"status": "ok", "config": asdict(server.cfg)})
+
+    @app.post("/reset")
+    async def reset() -> dict[str, Any]:
+        """Start over, for testing: stop every run, end every open stream,
+        delete all runs (ids start again at r-1) and put every knob back to
+        clean. Simulator only, like PUT /config."""
+        for run_id, run in server.runs.items():
+            # The engine is provided and has no stop(); its loop task is the
+            # only handle. A blocked run would otherwise tick forever.
+            if run._task is not None:
+                run._task.cancel()
+            await server.streams[run_id].close()
+        server.runs.clear()
+        server.streams.clear()
+        server._order.clear()
+        server.cfg = Config()
+        server._held = []
+        server._open_from = 0.0
+        return {"status": "ok", "config": asdict(server.cfg)}
 
     @app.get("/workflows")
     async def workflows() -> dict[str, Any]:

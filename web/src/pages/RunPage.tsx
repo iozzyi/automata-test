@@ -136,6 +136,17 @@ export function RunPage() {
     setRunId(id)
   }, [])
 
+  // After the simulator's testing reset: nothing open, nothing listed.
+  const [resets, setResets] = useState(0)
+  const onReset = useCallback(() => {
+    const empty = createRunState()
+    stateRef.current = empty
+    setState(empty)
+    setSelected(null)
+    setRunId(null)
+    setResets((n) => n + 1)
+  }, [])
+
   const onStart = useCallback(async () => {
     const id = await createRun()
     openRun(id)
@@ -178,7 +189,7 @@ export function RunPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-6 space-y-4 font-sans">
-      <ScenarioPicker />
+      <ScenarioPicker onReset={onReset} />
 
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-semibold">Lab run monitor</h1>
@@ -188,7 +199,7 @@ export function RunPage() {
         <div className="ml-auto flex items-center gap-2">
           <RunPicker
             currentRunId={runId}
-            refreshKey={`${runId}:${runStatus}`}
+            refreshKey={`${runId}:${runStatus}:${resets}`}
             onOpen={openRun}
           />
           <button
