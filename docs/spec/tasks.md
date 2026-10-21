@@ -78,10 +78,10 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 ## T6. NOTES.md (≈30 min, protected) · R15
 
 - [ ] T6.1 Time spent (from WORKLOG).
-- [ ] T6.2 Not built: snapshot re-fetch after a gap; refilling holes on a live socket; retry history for late joiners; idempotency key; per-instrument layouts.
+- [ ] T6.2 Not built: snapshot re-fetch after a gap; heartbeat / tail-loss detection (O6); retry history for late joiners; idempotency key; per-instrument layouts.
 - [ ] T6.3 Where it breaks: the snapshot's missing retry history; the shared `_held` list; server restart; unknown device not drawn; the hole tolerance trade-off; `37.0` → `37`.
 - [ ] T6.4 Never-seen step: design §3.8.
-- [ ] T6.5 Contract changes before integrators build on it: add a `step.retry_requested` event (a retry is silent today); put `seq` on the gap frame or version the frames; an `attempt` on the snapshot's step history; keep `seq`/`at`/`attempt` keys and the 202/409/422 codes stable.
+- [ ] T6.5 Contract changes before integrators build on it: **a heartbeat frame carrying the watermark (O6: a lost final event is otherwise undetectable; also catches a half-dead socket on a long blocked run)**; add a `step.retry_requested` event (a retry is silent today); put `seq` on the gap frame or version the frames; an `attempt` on the snapshot's step history; keep `seq`/`at`/`attempt` keys and the 202/409/422 codes stable.
 - [ ] T6.6 Feedback on the exercise: README `cd ../web` typo; RunPage comment vs. code race; `step.refused` carrying `attempt + 1`; what had to be guessed.
 - [ ] T6.7 Final commit; check the submission list in the README.
 
