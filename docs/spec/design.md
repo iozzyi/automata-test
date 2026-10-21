@@ -9,7 +9,7 @@
 |---|---|---|
 | `simulator/stream.py` | Numbering, replay buffer, atomic subscribe, gap detection, slow-viewer policy | R1–R4 |
 | `simulator/api.py` | TASK block sends the gap frame; retry route passes the raw body and returns coded 404s | R4.4, R9 |
-| `simulator/retry.py` | `handle_retry` contract; `claim_retry` gains an optional "expected attempt" guard | R9 |
+| `simulator/retry.py` | `handle_retry` contract; the failed → pending transition moved into a shared `_reset_for_retry` used by `claim_retry` and the handler | R9 |
 | `web/src/lib/runState.ts` | The fold, snapshot merge, hole tracking, connection honesty, retry ladder, new selectors | R5–R8, R11, R12 |
 | `web/src/lib/api.ts` | `retryStep` sends `{attempt}` and returns a typed result | R9.10, R12 |
 | `web/src/pages/RunPage.tsx` | Snapshot first, then connect; renders the new panel and detail | R6.4, R10 |
@@ -189,7 +189,7 @@ Nothing checks step ids against the workflow, so it's treated like any other: th
 
 Route: `POST /runs/{run_id}/steps/{step_id}/retry`. `api.py` reads the raw body and passes `(run | None, step_id, body: bytes)` to `handle_retry`.
 
-`claim_retry(run, step_id, expected_attempt: int | None = None)` is the provided function with one extra guard inside the lock: if `expected_attempt` is given and `step.attempt != expected_attempt`, refuse. Without the argument it behaves exactly as before. The retryable check also has to sit inside the same lock, because `claim_retry` clears `error`. So the guard and the check move into a small locked helper, `_decide_and_claim`, that returns one of `accepted | duplicate | not_failed | not_retryable | unknown_step`, together with the step as it was.
+The pinned-attempt check and the retryable check have to sit in the same lock as the claim (the claim clears `error`), so `handle_retry` takes `run.lock` itself and does all three in one critical section. The transition itself (`status = pending`, clear `refused`, times and `error`) lives in `_reset_for_retry(step)`, which both `handle_retry` and the provided `claim_retry` call, so it's written once. *Changed during build:* the spec first had `claim_retry` take an `expected_attempt` argument; the shared helper keeps the provided function's signature and behaviour exactly as they were. Unknown body fields are rejected (400), so a typo like `{"attempts": 1}` can't silently turn into an unpinned retry.
 
 Decision table (inside one `run.lock`):
 
@@ -205,7 +205,7 @@ Decision table (inside one `run.lock`):
 
 "`attempt == n` and `pending`" can only mean "claimed, not yet dispatched", because a step that has never run is `pending` with attempt 0.
 
-**202 body:** `{"run_id", "step_id", "retrying_attempt": n, "next_attempt": n+1, "status": <step status now>, "duplicate": bool}`.
+**202 body:** `{"run_id", "step_id", "retrying_attempt": n, "next_attempt": n+1, "status": <step status now>, "duplicate": bool, "message"}`. `message` is plain English for the screen ("Retry accepted. Attempt 2 will start when incubator-1 is free."); scripts use the other fields. The 409 message tells "already retried, attempt n+1 waiting" apart from "not failed".
 **Error body:** `{"code", "message", ...details}`, where details are `step` (409) or `error` (422).
 
 Why 202 and not 200: the retry is *accepted*, not done. The only real confirmation is `step.dispatched` for `next_attempt` on the stream. Without a body, a repeat after success returns 409, because the server can't tell a repeat from a stale click. That's why the browser always pins the attempt.

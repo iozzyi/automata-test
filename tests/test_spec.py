@@ -4,10 +4,14 @@ do not cover. Requirement ids are in each test's docstring."""
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 
+import httpx
 import pytest
 
-from simulator.events import STEP_STARTED, Event
+from simulator.api import Config, create_app
+from simulator.engine import DISPATCHED, DONE, FAILED, PENDING, RUNNING, Run
+from simulator.events import STEP_STARTED, Event, StepError
 from simulator.stream import (
     SLOW_GRACE_S,
     SUBSCRIBER_HARD_LIMIT,
@@ -195,3 +199,218 @@ def _peek(queue: asyncio.Queue[Event | None]) -> list[Event | None]:
     for item in items:
         queue.put_nowait(item)
     return items
+
+
+# ---------------------------------------------------------------------------
+# R9: the retry endpoint (design section 4.1)
+# ---------------------------------------------------------------------------
+
+STEP = "warm_reagent_plate"
+
+
+@pytest.fixture
+async def api() -> AsyncIterator[tuple[httpx.AsyncClient, Run]]:
+    """A client and a fresh run that has not been started, so tests set step
+    state by hand and the engine never moves it underneath them."""
+    app = create_app(Config(replay_buffer_size=64))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://sim") as client:
+        run_id = (await client.post("/runs")).json()["id"]
+        yield client, app.state.server.runs[run_id]
+
+
+async def _set(run: Run, status: str, attempt: int, error: StepError | None = None) -> None:
+    async with run.lock:
+        step = run.steps[STEP]
+        step.status, step.attempt, step.error = status, attempt, error
+        step.ended_at = "2026-09-02T00:00:03Z" if status == FAILED else None
+
+
+def _fault(retryable: bool) -> StepError:
+    return StepError(
+        code="SETPOINT_NOT_REACHED" if retryable else "CALIBRATION_EXPIRED",
+        instrument="incubator-1",
+        detail="it went wrong",
+        retryable=retryable,
+        context={"actual_c": 31.2},
+    )
+
+
+def _url(run: Run, step: str = STEP) -> str:
+    return f"/runs/{run.id}/steps/{step}/retry"
+
+
+async def test_retry_accepts_a_failed_step_with_no_body(
+    api: tuple[httpx.AsyncClient, Run],
+) -> None:
+    """R9.1, R9.2."""
+    client, run = api
+    await _set(run, FAILED, 1, _fault(retryable=True))
+
+    res = await client.post(_url(run))
+
+    assert res.status_code == 202
+    assert res.json() == {
+        "run_id": run.id,
+        "step_id": STEP,
+        "retrying_attempt": 1,
+        "next_attempt": 2,
+        "status": PENDING,
+        "duplicate": False,
+        "message": "Retry accepted. Attempt 2 will start when incubator-1 is free.",
+    }
+    assert run.steps[STEP].status == PENDING
+    assert run.steps[STEP].error is None
+
+
+async def test_repeating_a_pinned_retry_is_a_duplicate_not_a_new_attempt(
+    api: tuple[httpx.AsyncClient, Run],
+) -> None:
+    """R9.3: a double click, or a script retrying after a timeout."""
+    client, run = api
+    await _set(run, FAILED, 1, _fault(retryable=True))
+
+    first = await client.post(_url(run), json={"attempt": 1})
+    again = await client.post(_url(run), json={"attempt": 1})
+
+    assert first.status_code == again.status_code == 202
+    assert first.json()["duplicate"] is False
+    assert again.json()["duplicate"] is True
+    assert again.json()["next_attempt"] == 2
+    assert (run.steps[STEP].status, run.steps[STEP].attempt) == (PENDING, 1)
+
+
+@pytest.mark.parametrize("status", [DISPATCHED, RUNNING, DONE, FAILED])
+async def test_a_pinned_retry_of_a_superseded_attempt_is_a_duplicate(
+    api: tuple[httpx.AsyncClient, Run], status: str
+) -> None:
+    """R9.3: attempt 2 exists in any state, so retrying 1 already happened.
+    Even when attempt 2 has failed too: that one needs its own decision."""
+    client, run = api
+    await _set(run, status, 2, _fault(retryable=True) if status == FAILED else None)
+
+    res = await client.post(_url(run), json={"attempt": 1})
+
+    assert res.status_code == 202
+    assert res.json()["duplicate"] is True
+    assert (run.steps[STEP].status, run.steps[STEP].attempt) == (status, 2)
+
+
+async def test_an_unpinned_repeat_cannot_tell_and_says_not_failed(
+    api: tuple[httpx.AsyncClient, Run],
+) -> None:
+    """R9.4: without the attempt, a repeat after success looks like a retry of
+    a step that is not failed. That is why the browser always pins."""
+    client, run = api
+    await _set(run, FAILED, 1, _fault(retryable=True))
+    await client.post(_url(run))
+
+    res = await client.post(_url(run))
+
+    assert res.status_code == 409
+    assert res.json()["code"] == "STEP_NOT_FAILED"
+    assert "attempt 2 is waiting to start" in res.json()["message"]
+
+
+@pytest.mark.parametrize(
+    ("status", "attempt", "body"),
+    [
+        (PENDING, 0, None),  # never ran
+        (RUNNING, 1, None),
+        (DONE, 1, {"attempt": 1}),
+        (FAILED, 1, {"attempt": 2}),  # pinned to an attempt that does not exist
+        (RUNNING, 1, {"attempt": 1}),  # attempt 1 is running, not failed
+    ],
+)
+async def test_a_step_that_is_not_failed_is_left_alone(
+    api: tuple[httpx.AsyncClient, Run],
+    status: str,
+    attempt: int,
+    body: dict[str, int] | None,
+) -> None:
+    """R9.4."""
+    client, run = api
+    await _set(run, status, attempt, _fault(retryable=True) if status == FAILED else None)
+
+    res = await client.post(_url(run), json=body) if body else await client.post(_url(run))
+
+    assert res.status_code == 409
+    assert res.json()["code"] == "STEP_NOT_FAILED"
+    assert res.json()["step"]["status"] == status
+    assert (run.steps[STEP].status, run.steps[STEP].attempt) == (status, attempt)
+
+
+async def test_a_fault_that_retrying_cannot_fix_is_refused(
+    api: tuple[httpx.AsyncClient, Run],
+) -> None:
+    """R9.5: enforced here, not left to the button."""
+    client, run = api
+    await _set(run, FAILED, 1, _fault(retryable=False))
+
+    res = await client.post(_url(run), json={"attempt": 1})
+
+    assert res.status_code == 422
+    assert res.json()["code"] == "NOT_RETRYABLE"
+    assert res.json()["error"]["code"] == "CALIBRATION_EXPIRED"
+    assert res.json()["error"]["context"] == {"actual_c": 31.2}
+    step = run.steps[STEP]
+    assert step.status == FAILED and step.error is not None, "the step must be untouched"
+
+
+async def test_unknown_run_and_step(api: tuple[httpx.AsyncClient, Run]) -> None:
+    """R9.6."""
+    client, run = api
+    res = await client.post("/runs/r-99/steps/x/retry")
+    assert (res.status_code, res.json()["code"]) == (404, "UNKNOWN_RUN")
+    res = await client.post(_url(run, "spin_down"))
+    assert (res.status_code, res.json()["code"]) == (404, "UNKNOWN_STEP")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"not json",
+        b"[1]",
+        b'{"attempt": "1"}',
+        b'{"attempt": true}',
+        b'{"attempt": 0}',
+        b'{"attempt": 1.5}',
+        b'{"attempts": 1}',  # a typo must not silently become "unpinned"
+    ],
+)
+async def test_a_malformed_body_is_rejected_and_changes_nothing(
+    api: tuple[httpx.AsyncClient, Run], body: bytes
+) -> None:
+    """R9.7, R9.8."""
+    client, run = api
+    await _set(run, FAILED, 1, _fault(retryable=True))
+
+    res = await client.post(_url(run), content=body)
+
+    assert res.status_code == 400
+    assert res.json()["code"] == "INVALID_BODY"
+    assert res.json()["message"]
+    assert run.steps[STEP].status == FAILED
+
+
+async def test_an_empty_object_means_unpinned(api: tuple[httpx.AsyncClient, Run]) -> None:
+    client, run = api
+    await _set(run, FAILED, 1, _fault(retryable=True))
+    res = await client.post(_url(run), json={})
+    assert res.status_code == 202
+
+
+async def test_concurrent_retries_claim_exactly_once(
+    api: tuple[httpx.AsyncClient, Run],
+) -> None:
+    """R9.9: ten callers race for one failure; one wins, the rest are told it
+    already happened."""
+    client, run = api
+    await _set(run, FAILED, 1, _fault(retryable=True))
+
+    results = await asyncio.gather(
+        *(client.post(_url(run), json={"attempt": 1}) for _ in range(10))
+    )
+
+    assert all(r.status_code == 202 for r in results)
+    assert sorted(r.json()["duplicate"] for r in results) == [False] + [True] * 9

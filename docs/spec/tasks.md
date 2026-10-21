@@ -36,11 +36,11 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 
 ## T3. Problem 2: the retry endpoint (≈30 min) · R9
 
-- [ ] T3.1 `claim_retry(..., expected_attempt=None)` guard; `_decide_and_claim` under one lock (§4.1).
-- [ ] T3.2 `handle_retry(run, step_id, body)` with body parsing and the response table; `api.py` route passes the body and returns a coded 404 for an unknown run.
-- [ ] T3.3 `tests/test_spec.py`: every row of the §4.1 table, plus two concurrent pinned calls → exactly one `duplicate:false`.
-- [ ] T3.4 `web/src/lib/api.ts`: `retryStep(runId, stepId, attempt)` sends `{attempt}` and returns `RetryResult` (`ok`/`status`/`code`/`message`/body; network error → `code: 'NETWORK'`).
-- **Done when:** `uv run pytest` green, incl. the provided `test_retry_endpoint_retries_the_step`; `curl` against a `FAIL_STEP=warm_reagent_plate` run shows 202, then 202 duplicate, and `read_plate` shows 422.
+- [x] T3.1 Pinned-attempt check, retryable check and claim under one `run.lock`; transition shared with `claim_retry` via `_reset_for_retry` (§4.1, changed from the `expected_attempt` plan).
+- [x] T3.2 `handle_retry(run, step_id, body)` with body parsing and the response table; `api.py` route passes the body and returns a coded 404 for an unknown run.
+- [x] T3.3 `tests/test_spec.py`: every row of the §4.1 table, plus two concurrent pinned calls → exactly one `duplicate:false`.
+- [x] T3.4 `web/src/lib/api.ts`: `retryStep(runId, stepId, attempt)` sends `{attempt}` and returns `RetryResult` (`ok`/`status`/`code`/`message`/body; network error → `code: 'NETWORK'`).
+- **Done when:** `uv run pytest` green, incl. the provided `test_retry_endpoint_retries_the_step`; `curl` against a `FAIL_STEP=warm_reagent_plate` run shows 202, then 202 duplicate, and `read_plate` shows 422. ✅ 16:34: 47/47 pytest (10 provided + 37 new); curl on all three `FAIL_STEP` runs in Docker as expected (incubator and liquid handler: 202 → 202 duplicate → 409 → 400, run completes on attempt 2; plate reader: 422 every time with `service_ticket`, run stays blocked).
 
 ## T4. Problem 2: the failure surface (≈60 min) · R10–R14
 

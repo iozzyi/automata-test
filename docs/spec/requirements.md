@@ -110,12 +110,12 @@ Words used throughout:
 `POST /runs/{id}/steps/{step_id}/retry`, optional JSON body `{"attempt": n}` meaning "retry failed attempt n".
 
 1. WHEN the body is empty, THE endpoint SHALL retry the step's current attempt if it has failed. **[gate]** `test_retry_endpoint_retries_the_step`
-2. WHEN the retry is accepted, THE endpoint SHALL respond **202** with `{run_id, step_id, retrying_attempt, next_attempt, status, duplicate: false}`, and the step SHALL be `pending`. **[gate]**
+2. WHEN the retry is accepted, THE endpoint SHALL respond **202** with `{run_id, step_id, retrying_attempt, next_attempt, status, duplicate: false, message}`, and the step SHALL be `pending`. **[gate]**
 3. WHEN the body names attempt n AND attempt n has already been retried, THE endpoint SHALL respond **202** with the same body but `duplicate: true`, and SHALL NOT create another attempt. **[new test]**
 4. WHEN the step hasn't failed (and, if pinned, attempt n was never retried), THE endpoint SHALL respond **409** `STEP_NOT_FAILED` with the current step, and SHALL NOT change the step. **[gate]**
 5. WHEN the failure is not retryable, THE endpoint SHALL respond **422** `NOT_RETRYABLE` with the instrument's error, and SHALL NOT change the step. This SHALL be enforced on the server. **[new test]**
 6. WHEN the run or step doesn't exist, THE endpoint SHALL respond **404** `UNKNOWN_RUN` / `UNKNOWN_STEP`. **[new test]**
-7. WHEN the body is not valid JSON, or `attempt` is not a positive whole number, THE endpoint SHALL respond **400** `INVALID_BODY`. **[new test]**
+7. WHEN the body is not valid JSON, is not an object, has a field other than `attempt`, or `attempt` is not a positive whole number, THE endpoint SHALL respond **400** `INVALID_BODY`. **[new test]**
 8. Every error body SHALL have `{"code": …, "message": …}` plus any details.
 9. Checking the pinned attempt, checking `retryable` and claiming the retry SHALL happen in one locked step, so two callers can't both win. **[new test]** concurrent calls → one `duplicate: false`
 10. THE browser SHALL always send the attempt it is looking at.

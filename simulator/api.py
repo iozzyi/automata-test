@@ -8,7 +8,7 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -153,11 +153,11 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return JSONResponse({"id": run_id, "status": "running"}, status_code=202)
 
     @app.post("/runs/{run_id}/steps/{step_id}/retry")
-    async def retry(run_id: str, step_id: str) -> Response:
-        run = server.runs.get(run_id)
-        if run is None:
-            return JSONResponse({"error": "no such run"}, status_code=404)
-        return await handle_retry(run, step_id)
+    async def retry(run_id: str, step_id: str, request: Request) -> Response:
+        # The body is passed raw: it is optional, and a malformed one is the
+        # handler's to report (400 INVALID_BODY), not FastAPI's.
+        body = await request.body()
+        return await handle_retry(server.runs.get(run_id), run_id, step_id, body)
 
     @app.websocket("/ws")
     async def serve_ws(ws: WebSocket) -> None:
