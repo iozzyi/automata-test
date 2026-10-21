@@ -25,14 +25,14 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 
 ## T2. Rung 2: fold events into state (`runState.ts`) (≈50 min) · R5, R6, R7, R8.1–R8.2
 
-- [ ] T2.1 State shape (§3.1), `createRunState`, `mergeAttempt` with status and run-status ranks.
-- [ ] T2.2 `applyMessage` frame classification; `applyEvent` (drop rules, contiguous tracking, per-type patches, refused map) (§3.2–3.3).
-- [ ] T2.3 `applySnapshot` forward-only merge, skip `pending`, floor and contiguous (§3.4).
-- [ ] T2.4 `applyTransport`, `connection` derivation incl. hole tolerance of 10 (§3.6, O1).
-- [ ] T2.5 `selectTracks` (DEVICES order, unknown devices appended, deterministic sort), `selectResumeFrom`, `selectAttempt`.
-- [ ] T2.6 `RunPage`: await the snapshot, then `connect` (R6.4).
-- [ ] T2.7 `web/tests/runState.spec.test.ts`: foreign run_id; refused order; late snapshot no regress; pending snapshot step; hole clears on arrival; `selectAttempt.supersededBy`.
-- **Done when:** `pnpm test` all green (provided + new), `pnpm check` clean, and with the simulator up a clean run draws 7 green bars (`./scripts/acceptance.sh`).
+- [x] T2.1 State shape (§3.1), `createRunState`, `mergeAttempt` with status and run-status ranks.
+- [x] T2.2 `applyMessage` frame classification; `applyEvent` (drop rules, contiguous tracking, per-type patches, refused map) (§3.2–3.3).
+- [x] T2.3 `applySnapshot` forward-only merge, skip `pending`, floor and contiguous (§3.4).
+- [x] T2.4 `applyTransport`, `connection` derivation incl. hole tolerance of 10 (§3.6, O1).
+- [x] T2.5 `selectTracks` (DEVICES order, unknown devices appended, deterministic sort), `selectResumeFrom`, `selectAttempt`.
+- [x] T2.6 `RunPage`: await the snapshot, then `connect` (R6.4).
+- [x] T2.7 `web/tests/runState.spec.test.ts`: foreign run_id; refused order; late snapshot no regress; pending snapshot step; hole clears on arrival; `selectAttempt.supersededBy`.
+- **Done when:** `pnpm test` all green (provided + new), `pnpm check` clean, and with the simulator up a clean run draws 7 green bars (`./scripts/acceptance.sh`). ✅ 16:26: 44/44 vitest (17 gates + 27 new), `pnpm check` + `tsc` clean, `acceptance.sh` 3/3 against the Docker simulator; checked by eye in the browser.
 
 ## T3. Problem 2: the retry endpoint (≈30 min) · R9
 
@@ -60,7 +60,7 @@ Order follows the brief's ladder: rung 1 → rung 2 → Problem 2 → rungs 3–
 ## T5. Rungs 3–4: reconnect and gap (≈30 min) · R2.4, R4.4–R4.8, R8.3
 
 - [ ] T5.1 `api.py` TASK: send the gap frame (§2.4).
-- [ ] T5.2 `runState.ts`: `applyGap` (sticky, write off), closed-after-gap note.
+- [x] T5.2 (done early in T2: two provided vitest gates need it) `runState.ts`: `applyGap` (sticky, write off), closed-after-gap note.
 - [ ] T5.3 `tests/test_spec.py`: websocket test that the first frame after an unservable resume is the gap frame, then the backlog.
 - [ ] T5.4 `./scripts/check-disconnect.sh` green.
 - [ ] T5.5 Manual: `SOCKET_KILL_MS=2500 SOCKET_REJECT_MS=6000 REPLAY_BUFFER_SIZE=2` → rose banner, it stays after reconnect, and some bars stay striped (matches `docs/timeline-gap.png`).

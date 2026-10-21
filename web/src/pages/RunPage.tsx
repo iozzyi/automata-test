@@ -33,22 +33,32 @@ export function RunPage() {
   useEffect(() => {
     if (!runId) return
     const alive = { current: true }
+    let close: (() => void) | undefined
     void (async () => {
       // Snapshot first, then subscribe from where the snapshot sits. That is
-      // what selectResumeFrom is for.
-      const snap = await fetchSnapshot(runId)
+      // what selectResumeFrom is for. Each run starts from a fresh state, so a
+      // second run does not inherit the first one's bars.
+      let fresh = createRunState()
+      try {
+        fresh = applySnapshot(fresh, await fetchSnapshot(runId))
+      } catch {
+        // No snapshot: connect from 0 and let the server say what it can serve.
+      }
       if (!alive.current) return
-      setState((s) => applySnapshot(s, snap))
+      // The socket asks selectResumeFrom synchronously as it connects, before
+      // React re-renders, so the ref has to hold the snapshot already.
+      stateRef.current = fresh
+      setState(fresh)
+      close = connect(runId, {
+        resumeFrom: () => selectResumeFrom(stateRef.current),
+        onMessage: (msg) => setState((s) => applyMessage(s, msg)),
+        onOpen: () => setState((s) => applyTransport(s, 'open')),
+        onClose: () => setState((s) => applyTransport(s, 'closed')),
+      })
     })()
-    const close = connect(runId, {
-      resumeFrom: () => selectResumeFrom(stateRef.current),
-      onMessage: (msg) => setState((s) => applyMessage(s, msg)),
-      onOpen: () => setState((s) => applyTransport(s, 'open')),
-      onClose: () => setState((s) => applyTransport(s, 'closed')),
-    })
     return () => {
       alive.current = false
-      close()
+      close?.()
     }
   }, [runId])
 
