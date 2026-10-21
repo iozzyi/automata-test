@@ -1,13 +1,13 @@
 # Hand-off: Automata take-home (Lab run monitor)
 
-Context carried over from a planning session in Claude (claude.ai/code, 2026-10-21, ~14:15–15:45 UK). Read this first, then `docs/SOLUTION_OUTLINE.md` (diagrams, gap analysis, full decisions register) and `README.md` (the brief).
+Context carried over from a planning session in Claude (claude.ai/code, 2026-10-21, ~14:15–15:45 UK). Read this first, then the spec in `docs/spec/` (`requirements.md` → `design.md` → `tasks.md`; tasks.md is the working checklist), `docs/WORKLOG.md` (time and decisions log), `docs/SOLUTION_OUTLINE.md` (diagrams, gap analysis) and `README.md` (the brief).
 
 ## Who I am and how to work with me
 
 - Take-home for a **Principal Engineer** role at Automata (lab automation). AI use is permitted, but **I must be able to explain and justify every decision** in the interview. The brief also asks to share AI conversations.
 - **When anything is ambiguous, stop and ask me.** When you have the context, give **3 options with one recommended** (recommended first), then ask me to choose. Use the AskUserQuestion tool where available.
 - Explain in **plain English**; treat me as a layman on the engineering terms. Be honest about trade-offs and weak ideas, including mine.
-- Process is **spec-driven**: settled decisions → `SPEC.md` (behaviour + acceptance criteria) → implement → verify.
+- Process is **spec-driven**: settled decisions → `docs/spec/` (requirements with acceptance criteria, design, tasks) → implement → verify.
 - Keep a running **time and decisions log** so `NOTES.md` (required) almost writes itself.
 - Git author for this repo: **Osman Ilyas <osmanilyas@hotmail.com>** (set in the repo's local git config). End commit messages with:
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
@@ -40,7 +40,7 @@ Prereqs (not yet verified on this Mac): Docker, Node 22 + pnpm 11, Python 3.12 +
 
 ## Current state
 
-- Git: the folder was just `git init`-ed on `main` with **no commits**. The earlier commits were undone to fix the author. Planned commits: (1) the untouched starter, everything except `docs/SOLUTION_OUTLINE.md` and this file; (2) the solution outline; then the hand-off and spec as we go.
+- Git: on `main`, two commits so far: `37cf299` untouched starter, `564c4b4` solution outline. The hand-off, spec and work log are not committed yet (tasks.md T0.2).
 - GitHub: repo **`automata-test`** (private suggested) **not created yet**. `gh` is not installed locally: `brew install gh && gh auth login`, then `gh repo create automata-test --private --source=. --remote=origin --push`.
 - Written so far: `docs/SOLUTION_OUTLINE.md` (v0.2, 17 Mermaid diagrams, decisions A–I in §8). No source files changed yet.
 
@@ -48,7 +48,7 @@ Prereqs (not yet verified on this Mac): Docker, Node 22 + pnpm 11, Python 3.12 +
 
 **Problem 1**
 - **A, slow viewer (`stream.py`):** grace period, then disconnect. Each viewer's queue: over **256** queued starts a **2 s** clock; if still over 256 when it expires, or as soon as it's over **512**, disconnect: clear its queue and put the `None` end-of-stream marker. Check on every `publish()`, no timer task. `publish()` must never await a viewer. The browser then resumes from the buffer, or gets a gap. *Rejected:* plain disconnect, unbounded queue, drop + inline gap, retry/backoff + per-viewer DLQ (the replay buffer already is the replay store; a DLQ is for poison messages, not slow consumers; retrying in `publish()` stalls the run), count-only grace (same as a bigger queue).
-- **B, ordering (`runState.ts`):** apply every event immediately with an order-proof merge: attempts keyed `stepId#attempt`, status only moves forward (dispatched < running < done/failed), times taken from each event's own `at`. Remember seen seqs, so duplicates are ignored. Ignore events whose `run_id` isn't ours, and anything at or below the snapshot `seq`. A hole still open after **5** later events → `stale` with note "An update was lost in transit; this view may be incomplete", cleared if it arrives. **`selectResumeFrom` = the highest seq with nothing missing before it** (not the max seen), so a reconnect refills holes.
+- **B, ordering (`runState.ts`):** apply every event immediately with an order-proof merge: attempts keyed `stepId#attempt`, status only moves forward (dispatched < running < done/failed), times taken from each event's own `at`. Remember seen seqs, so duplicates are ignored. Ignore events whose `run_id` isn't ours, and anything at or below the snapshot `seq`. A hole still open after **10** later events (raised from 5, see O1) → `stale` with note "An update was lost in transit; this view may be incomplete", cleared if it arrives. **`selectResumeFrom` = the highest seq with nothing missing before it** (not the max seen), so a reconnect refills holes.
 - **C, unservable resume (`api.py` TASK):** send `{"type":"gap","from":<resume_from>,"earliest":<oldest held>}`, then the backlog still held, then live. Client status `gap`, **sticky** across reconnects. Seqs `from+1 .. earliest-1` are **written off**, so later resumes don't re-request them. Bars whose end fell in the gap stay `running`. *Not built (for NOTES):* re-fetching the snapshot to repair the present.
 
 **Problem 2**
@@ -82,17 +82,18 @@ Prereqs (not yet verified on this Mac): Docker, Node 22 + pnpm 11, Python 3.12 +
 - **README typo:** `cd ../web` should be `cd web` (for the feedback section).
 - The tests' gap frame shape is `{type:'gap', from:10, earliest:40}`. The stalled-viewer test accepts either "still whole" or "disconnected (None)".
 
-## Open questions to settle while writing SPEC.md (ask me, 3 options + recommendation)
+## Settled while writing the spec (2026-10-21)
 
-- Gap rule edge cases: `resume_from` above the watermark; a first connect with `resume_from=0` after early events have been evicted.
-- `applySnapshot` arriving after newer events (snapshot `seq` lower than what's applied).
-- How `context` values that are objects or arrays are shown.
-- Where the "retry in flight" state lives (`runState.ts`, so it can be unit-tested, vs. React component state).
+- **Q1:** strict gap rule (resume above the watermark, or 0 after eviction, is a gap); fix `RunPage` to load the snapshot before connecting.
+- **Q2:** a late snapshot merges forward-only; it never moves state backwards.
+- **Q3:** nested `context` values are shown as labelled, bordered boxes (lists numbered), not raw JSON; Copy JSON stays.
+- **Q4:** retry-in-flight state lives in `runState.ts` (`applyRetryRequested`, `applyRetryResult`, `selectFailures(state, now)`).
+- **O1:** hole tolerance raised from 5 to **10** later events: at 5, `REORDER_PCT=30` would flash false "update lost" warnings about 1 time in 6 (~3% at 10). See `docs/spec/design.md` §6.
 
 ## Next steps
 
 1. Make the commits (starter, then outline), create and push `automata-test`.
-2. Write `SPEC.md` from the decisions above, with acceptance criteria per decision (and new unit tests for Problem 2 behaviour).
+2. ~~Write the spec~~ done: `docs/spec/`. From here, work through `docs/spec/tasks.md` in order.
 3. Rung 1, `stream.py` → `uv run pytest`.
 4. Rung 2, `runState.ts` → `pnpm test`.
 5. Problem 2: endpoint, then the failure surface; check with the three `FAIL_STEP` scenarios.
